@@ -152,9 +152,13 @@ void MainWindow::buildUi()
     sideLayout->addWidget(m_sessionList, 1);
 
     // 文档要求左栏底部展示额度，接口尚未接入，先占位
-    auto *quota = new QLabel(QStringLiteral("免费额度 · 未接入"), sidebar);
+    // 额度查询已实测不可行（需阿里云 RAM AccessKey + BSS OpenAPI，
+    // DashScope API Key 无权访问），此处如实标注而非画饼
+    auto *quota = new QLabel(QStringLiteral("额度查询 · 需阿里云 AccessKey"), sidebar);
     quota->setObjectName(QStringLiteral("quotaLabel"));
-    quota->setToolTip(QStringLiteral("接入百炼用量接口后在此显示剩余额度"));
+    quota->setToolTip(QStringLiteral(
+        "百炼未提供用 DashScope API Key 查询免费额度的接口。\n"
+        "如需显示额度，需配置阿里云 RAM AccessKey 调用 BSS OpenAPI。"));
     sideLayout->addWidget(quota);
 
     outer->addWidget(sidebar);
