@@ -12,7 +12,7 @@ OpenAiCompatProvider::Config ProviderRegistry::bailianConfig()
         QStringLiteral("DASHSCOPE_API_KEY"),
         QStringLiteral("dashscope_api_key"),
         {QStringLiteral("qwen3.8-flash"), QStringLiteral("qwen3.8-max"),
-         QStringLiteral("qwen-plus")},
+         QStringLiteral("qwen-plus"), QStringLiteral("qwen3-vl-plus")},
     };
 }
 

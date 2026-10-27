@@ -1,5 +1,6 @@
 #include "openaicompatprovider.h"
 
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -8,6 +9,7 @@
 #include <QNetworkRequest>
 #include <QSettings>
 #include <QTimer>
+#include <QUrl>
 
 #include "core/tools/toolregistry.h"
 
@@ -67,7 +69,33 @@ void OpenAiCompatProvider::send(const QList<Message> &history, const QString &mo
             o.insert(QStringLiteral("content"), m.content);
         } else {
             o.insert(QStringLiteral("role"), roleToStr(m.role));
-            o.insert(QStringLiteral("content"), m.content);
+            if (m.imagePath.isEmpty()) {
+                o.insert(QStringLiteral("content"), m.content);
+            } else {
+                // 多模态消息：content 变为数组（OpenAI 兼容格式），
+                // 本地图片转 data URL，避免 file:// 兼容性问题
+                QJsonArray content;
+                if (!m.content.isEmpty())
+                    content.append(QJsonObject{
+                        {QStringLiteral("type"), QStringLiteral("text")},
+                        {QStringLiteral("text"), m.content}});
+                QString dataUrl;
+                QFile f(m.imagePath);
+                if (f.exists() && f.open(QIODevice::ReadOnly)) {
+                    const QByteArray bytes = f.readAll();
+                    const QString mime = m.imageMime.isEmpty()
+                        ? QStringLiteral("image/png") : m.imageMime;
+                    dataUrl = QStringLiteral("data:") + mime + QStringLiteral(";base64,")
+                              + QString::fromLatin1(bytes.toBase64());
+                } else {
+                    dataUrl = QUrl::fromLocalFile(m.imagePath).toString();
+                }
+                content.append(QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("image_url")},
+                    {QStringLiteral("image_url"),
+                     QJsonObject{{QStringLiteral("url"), dataUrl}}}});
+                o.insert(QStringLiteral("content"), content);
+            }
             if (!m.toolCalls.isEmpty())
                 o.insert(QStringLiteral("tool_calls"), m.toolCalls);
         }
