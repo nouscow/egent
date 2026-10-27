@@ -1,5 +1,7 @@
 # Egent
 
+Egent is a local AI desktop client for Windows. Chat with any OpenAI-compatible API: Bailian, DeepSeek, OpenAI and more. Switch model on the fly. Chats persist in SQLite; themes come from JSON tokens. Optional Agent mode reads, searches, runs and writes files in a sandbox, gated by a permission prompt and command blacklist. Keys stay local.
+
 本地 AI 客户端：多厂商对话（百炼 / DeepSeek / OpenAI）、可切换主题、会话持久化，并支持可选的本地工具调用（读文件 / 执行命令 / 写文件）。
 
 ## 构建
