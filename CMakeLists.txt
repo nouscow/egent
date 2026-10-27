@@ -5,14 +5,13 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network Sql LinguistTools)
 
 qt_standard_project_setup()
 
-qt_add_executable(egent
-    WIN32 MACOSX_BUNDLE
-    main.cpp
-    mainwindow.cpp
-    mainwindow.h
-    mainwindow.ui
-
-    # 核心：数据模型 / SSE 解析 / provider 接口与实现
+# ============================================================
+# 核心静态库
+# ------------------------------------------------------------
+# 所有与界面无关的逻辑都放这里。新增 core 文件只改这一处，
+# 应用与三个测试程序统一链接它，避免「加了文件忘记同步某个 target」。
+# ============================================================
+qt_add_library(egent_core STATIC
     core/models.h
     core/models.cpp
     core/sseparser.h
@@ -22,8 +21,32 @@ qt_add_executable(egent
     core/providers/imodelprovider.h
     core/providers/bailianprovider.h
     core/providers/bailianprovider.cpp
+    core/agentloop.h
+    core/agentloop.cpp
 
-    # 界面组件：头像 + 气泡
+    # Agent 工具（M5 只读）
+    core/tools/itool.h
+    core/tools/pathguard.h
+    core/tools/pathguard.cpp
+    core/tools/readonlytools.h
+    core/tools/readonlytools.cpp
+    core/tools/toolregistry.h
+    core/tools/toolregistry.cpp
+)
+target_include_directories(egent_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(egent_core PUBLIC Qt::Core Qt::Network Qt::Sql)
+
+# ============================================================
+# 应用
+# ============================================================
+qt_add_executable(egent
+    WIN32 MACOSX_BUNDLE
+    main.cpp
+    mainwindow.cpp
+    mainwindow.h
+    mainwindow.ui
+
+    # 界面组件：头像 + 气泡 + 会话列表 + 设置
     ui/avatarwidget.h
     ui/avatarwidget.cpp
     ui/avatarstore.h
@@ -62,14 +85,10 @@ qt_add_translations(
     TS_FILES egent_zh_CN.ts
 )
 
-target_include_directories(egent PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
 target_link_libraries(egent
     PRIVATE
-        Qt::Core
+        egent_core
         Qt::Widgets
-        Qt::Network
-        Qt::Sql
 )
 
 install(TARGETS egent
@@ -85,7 +104,11 @@ qt_generate_deploy_app_script(
 )
 install(SCRIPT ${deploy_script})
 
-# ---------------- 主题模块自测（console，不依赖 GUI） ----------------
+# ============================================================
+# 测试程序
+# ============================================================
+
+# 主题模块（console，不依赖 GUI，也不依赖 core）
 qt_add_executable(theme_selftest
     tests/theme_selftest.cpp
     theme/themedata.h
@@ -99,41 +122,18 @@ target_compile_definitions(theme_selftest PRIVATE
 )
 target_link_libraries(theme_selftest PRIVATE Qt::Core Qt::Gui)
 
-# ---------------- M1 验收：真实调用百炼接口（需要 DASHSCOPE_API_KEY） ----------------
-qt_add_executable(provider_live_test
-    tests/provider_live_test.cpp
-    core/models.h
-    core/models.cpp
-    core/sseparser.h
-    core/sseparser.cpp
-    core/providers/imodelprovider.h
-    core/providers/bailianprovider.h
-    core/providers/bailianprovider.cpp
-)
-target_include_directories(provider_live_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(provider_live_test PRIVATE Qt::Core Qt::Network)
+# M1 验收：真实调用百炼接口（需要 DASHSCOPE_API_KEY）
+qt_add_executable(provider_live_test tests/provider_live_test.cpp)
+target_link_libraries(provider_live_test PRIVATE egent_core)
 
-# ---------------- 会话存储自测（真实 SQLite，临时目录） ----------------
-qt_add_executable(session_test
-    tests/session_test.cpp
-    core/models.h
-    core/models.cpp
-    core/sessionstore.h
-    core/sessionstore.cpp
-)
-target_include_directories(session_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(session_test PRIVATE Qt::Core Qt::Sql)
+# 会话存储（真实 SQLite，临时目录）
+qt_add_executable(session_test tests/session_test.cpp)
+target_link_libraries(session_test PRIVATE egent_core)
 
-# ---------------- Agent 只读工具自测（含路径越界拦截） ----------------
-qt_add_executable(tool_test
-    tests/tool_test.cpp
-    core/tools/pathguard.h
-    core/tools/pathguard.cpp
-    core/tools/itool.h
-    core/tools/readonlytools.h
-    core/tools/readonlytools.cpp
-    core/tools/toolregistry.h
-    core/tools/toolregistry.cpp
-)
-target_include_directories(tool_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(tool_test PRIVATE Qt::Core)
+# Agent 只读工具（含路径越界拦截）
+qt_add_executable(tool_test tests/tool_test.cpp)
+target_link_libraries(tool_test PRIVATE egent_core)
+
+# Agent 端到端：真实模型 + 工具循环（需要 DASHSCOPE_API_KEY）
+qt_add_executable(agent_test tests/agent_test.cpp)
+target_link_libraries(agent_test PRIVATE egent_core)

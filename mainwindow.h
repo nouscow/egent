@@ -12,6 +12,7 @@ class MainWindow;
 }
 QT_END_NAMESPACE
 
+class AgentLoop;
 class ChatView;
 class QCheckBox;
 class QListWidget;
@@ -43,6 +44,8 @@ private slots:
     void onSendClicked();
     void openSettings();
     void onCopyMessage(const QString &text);
+    void onToolStarted(const QString &name, const QString &argsJson);
+    void onToolFinished(const QString &name, bool ok, const QString &result);
     void onRegenerateMessage(int index);
     void onNewSession();
     void onSessionActivated(QListWidgetItem *item);
@@ -74,6 +77,7 @@ private:
     QListWidget *m_sessionList = nullptr;
     int m_currentSessionId = -1;
     ChatView *m_chatView = nullptr;
+    AgentLoop *m_agentLoop = nullptr;
     QPlainTextEdit *m_input = nullptr;
     QComboBox *m_themeBox = nullptr;
     QComboBox *m_modelBox = nullptr;

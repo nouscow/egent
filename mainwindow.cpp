@@ -20,6 +20,9 @@
 #include <QSettings>
 #include <QShortcut>
 #include <QStyle>
+#include "core/agentloop.h"
+#include "core/tools/pathguard.h"
+#include "core/tools/toolregistry.h"
 #include "ui/chatview.h"
 #include "ui/settingsdialog.h"
 #include <QHBoxLayout>
@@ -54,14 +57,20 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_chatView, &ChatView::regenerateRequested,
             this, &MainWindow::onRegenerateMessage);
 
-    // ---- M1：接入真实流式接口 ----
+    // ---- 真实流式接口 + Agent 循环 ----
+    // 界面不再直连 provider：所有请求都经过 AgentLoop，
+    // 由它决定「这一轮是最终回答，还是要先调工具」。
     m_provider = new BailianProvider(this);
-    connect(m_provider, &IModelProvider::tokenReceived,
-            this, &MainWindow::onProviderToken);
-    connect(m_provider, &IModelProvider::finished,
-            this, &MainWindow::onProviderFinished);
-    connect(m_provider, &IModelProvider::errorOccurred,
+    m_agentLoop = new AgentLoop(m_provider, this);
+    connect(m_agentLoop, &AgentLoop::contentDelta, this, &MainWindow::onProviderToken);
+    connect(m_agentLoop, &AgentLoop::finished, this,
+            [this](const QList<Message> &) { onProviderFinished(); });
+    connect(m_agentLoop, &AgentLoop::errorOccurred,
             this, &MainWindow::onProviderError);
+    connect(m_agentLoop, &AgentLoop::toolCallStarted,
+            this, &MainWindow::onToolStarted);
+    connect(m_agentLoop, &AgentLoop::toolCallFinished,
+            this, &MainWindow::onToolFinished);
 
     m_streamTimer = new QTimer(this);
     m_streamTimer->setInterval(50);
@@ -400,13 +409,29 @@ void MainWindow::onSessionContextMenu(const QPoint &pos)
 
 void MainWindow::startRequest(const QList<Message> &history)
 {
-    if (!m_provider)
+    if (!m_provider || !m_agentLoop)
         return;
     // 先切按钮再发请求：若 send 同步失败，onProviderError 会把文字改回来
     m_sendBtn->setText(QStringLiteral("停止"));
     m_provider->setOption(QStringLiteral("enable_thinking"),
                           m_thinkingBox && m_thinkingBox->isChecked());
-    m_provider->send(history, m_modelBox->currentText());
+    m_agentLoop->setModel(m_modelBox->currentText());
+    m_agentLoop->start(history);
+}
+
+void MainWindow::onToolStarted(const QString &name, const QString &argsJson)
+{
+    statusBar()->showMessage(
+        QStringLiteral("⚙ 正在调用 %1 %2").arg(name, argsJson.left(80)));
+}
+
+void MainWindow::onToolFinished(const QString &name, bool ok, const QString &result)
+{
+    statusBar()->showMessage(
+        QStringLiteral("⚙ %1 %2：%3")
+            .arg(name, ok ? QStringLiteral("完成") : QStringLiteral("失败"),
+                 result.left(60).replace(QLatin1Char('\n'), QLatin1Char(' '))),
+        4000);
 }
 
 void MainWindow::onCopyMessage(const QString &text)
@@ -484,6 +509,18 @@ void MainWindow::applyParamsFromSettings()
                           s.value(QStringLiteral("params/max_tokens"), 4096).toInt());
     m_provider->setOption(QStringLiteral("timeout_ms"),
                           s.value(QStringLiteral("params/timeout_sec"), 60).toInt() * 1000);
+
+    // ---- Agent 只读能力 ----
+    const bool agentOn = s.value(QStringLiteral("agent/enabled"), false).toBool();
+    const QString workspace = s.value(QStringLiteral("agent/workspace")).toString();
+    m_provider->setOption(QStringLiteral("tools_enabled"), agentOn);
+    if (agentOn && !workspace.isEmpty()) {
+        ToolRegistry::instance().registerDefaults();
+        PathGuard::instance().setWorkspace(workspace);
+    } else {
+        // 关掉时清空工作区，等于彻底关闭文件访问
+        PathGuard::instance().setWorkspace(QString());
+    }
 }
 
 void MainWindow::onExportSession(int sessionId)
@@ -574,8 +611,8 @@ void MainWindow::onSendClicked()
 {
     // 生成中：按钮点击 = 停止（首字可能要等好几秒，必须能中止）
     if (m_streamingMsgIndex >= 0) {
-        if (m_provider)
-            m_provider->cancel();
+        if (m_agentLoop)
+            m_agentLoop->cancel();
         return;
     }
 

@@ -4,6 +4,7 @@
 #include "core/providers/imodelprovider.h"
 #include "core/sseparser.h"
 
+#include <QMap>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
@@ -55,6 +56,16 @@ private:
     // 采样参数（可通过 setOption 调整，见设置面板）
     double m_temperature = 0.7;
     int m_maxTokens = 4096;
+
+    // ---- Agent 工具调用 ----
+    bool m_enableTools = false;
+    struct PendingToolCall
+    {
+        QString id;
+        QString name;
+        QString arguments; // 跨分片累加
+    };
+    QMap<int, PendingToolCall> m_pendingCalls;
 
     QString apiKey() const;
     static QUrl endpoint();

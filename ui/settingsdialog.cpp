@@ -1,6 +1,11 @@
 #include "settingsdialog.h"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QFileDialog>
+#include <QHBoxLayout>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QLabel>
@@ -55,10 +60,37 @@ void SettingsDialog::buildUi()
     m_timeoutSec->setToolTip(QStringLiteral("多久没有任何响应就判定为超时并中断。"));
     form->addRow(QStringLiteral("请求超时"), m_timeoutSec);
 
+    // ---- Agent 只读能力 ----
+    m_agentEnabled = new QCheckBox(QStringLiteral("启用 Agent 只读工具"), this);
+    m_agentEnabled->setToolTip(
+        QStringLiteral("开启后，模型可以读取工作区内的文件、搜索内容。\n"
+                       "默认关闭。当前版本只能读，不能修改或执行命令。"));
+    form->addRow(QStringLiteral("Agent 能力"), m_agentEnabled);
+
+    auto *wsRow = new QWidget(this);
+    auto *wsLayout = new QHBoxLayout(wsRow);
+    wsLayout->setContentsMargins(0, 0, 0, 0);
+    wsLayout->setSpacing(8);
+    m_workspace = new QLineEdit(wsRow);
+    m_workspace->setPlaceholderText(QStringLiteral("留空则不启用文件访问"));
+    auto *browseBtn = new QPushButton(QStringLiteral("浏览…"), wsRow);
+    browseBtn->setFixedWidth(72);
+    connect(browseBtn, &QPushButton::clicked, this, [this]() {
+        const QString dir = QFileDialog::getExistingDirectory(
+            this, QStringLiteral("选择工作区目录"), m_workspace->text());
+        if (!dir.isEmpty())
+            m_workspace->setText(dir);
+    });
+    wsLayout->addWidget(m_workspace, 1);
+    wsLayout->addWidget(browseBtn);
+    form->addRow(QStringLiteral("工作区目录"), wsRow);
+
     root->addLayout(form);
 
     auto *hint = new QLabel(
         QStringLiteral("修改立即生效，作用于下一次发送。"), this);
+    hint->setText(QStringLiteral("修改立即生效，作用于下一次发送。\n"
+                                 "Agent 工具只能访问工作区目录内的文件。"));
     hint->setObjectName(QStringLiteral("hintLabel"));
     root->addWidget(hint);
 
@@ -81,6 +113,8 @@ void SettingsDialog::loadFromSettings()
         s.value(QStringLiteral("params/max_tokens"), kDefaultMaxTokens).toInt());
     m_timeoutSec->setValue(
         s.value(QStringLiteral("params/timeout_sec"), kDefaultTimeoutSec).toInt());
+    m_agentEnabled->setChecked(s.value(QStringLiteral("agent/enabled"), false).toBool());
+    m_workspace->setText(s.value(QStringLiteral("agent/workspace")).toString());
 }
 
 void SettingsDialog::saveToSettings()
@@ -89,6 +123,8 @@ void SettingsDialog::saveToSettings()
     s.setValue(QStringLiteral("params/temperature"), m_temperature->value());
     s.setValue(QStringLiteral("params/max_tokens"), m_maxTokens->value());
     s.setValue(QStringLiteral("params/timeout_sec"), m_timeoutSec->value());
+    s.setValue(QStringLiteral("agent/enabled"), m_agentEnabled->isChecked());
+    s.setValue(QStringLiteral("agent/workspace"), m_workspace->text().trimmed());
 }
 
 double SettingsDialog::temperature() const
@@ -104,4 +140,14 @@ int SettingsDialog::maxTokens() const
 int SettingsDialog::timeoutSeconds() const
 {
     return m_timeoutSec->value();
+}
+
+bool SettingsDialog::agentEnabled() const
+{
+    return m_agentEnabled->isChecked();
+}
+
+QString SettingsDialog::workspace() const
+{
+    return m_workspace->text().trimmed();
 }

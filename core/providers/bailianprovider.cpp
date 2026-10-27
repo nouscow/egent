@@ -9,6 +9,8 @@
 #include <QSettings>
 #include <QTimer>
 
+#include "core/tools/toolregistry.h"
+
 BailianProvider::BailianProvider(QObject *parent)
     : IModelProvider(parent)
     , m_nam(new QNetworkAccessManager(this))
@@ -49,6 +51,7 @@ void BailianProvider::send(const QList<Message> &history, const QString &model)
     m_cancelled = false;
     m_timedOut = false;
     m_errorBody.clear();
+    m_pendingCalls.clear();
     m_timeoutTimer->stop();
 
     if (m_reply) {
@@ -60,8 +63,17 @@ void BailianProvider::send(const QList<Message> &history, const QString &model)
     QJsonArray messages;
     for (const Message &m : history) {
         QJsonObject o;
-        o.insert(QStringLiteral("role"), roleToStr(m.role));
-        o.insert(QStringLiteral("content"), m.content);
+        if (m.role == Role::Tool) {
+            // 工具结果回灌：必须带 tool_call_id，模型靠它对齐是哪次调用
+            o.insert(QStringLiteral("role"), QStringLiteral("tool"));
+            o.insert(QStringLiteral("tool_call_id"), m.toolCallId);
+            o.insert(QStringLiteral("content"), m.content);
+        } else {
+            o.insert(QStringLiteral("role"), roleToStr(m.role));
+            o.insert(QStringLiteral("content"), m.content);
+            if (!m.toolCalls.isEmpty())
+                o.insert(QStringLiteral("tool_calls"), m.toolCalls);
+        }
         messages.append(o);
     }
     QJsonObject body;
@@ -74,6 +86,9 @@ void BailianProvider::send(const QList<Message> &history, const QString &model)
     body.insert(QStringLiteral("enable_thinking"), m_enableThinking);
     body.insert(QStringLiteral("temperature"), m_temperature);
     body.insert(QStringLiteral("max_tokens"), m_maxTokens);
+
+    if (m_enableTools && !ToolRegistry::instance().isEmpty())
+        body.insert(QStringLiteral("tools"), ToolRegistry::instance().toolsForModel());
 
     QNetworkRequest req(endpoint());
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
@@ -111,9 +126,19 @@ void BailianProvider::onReadyRead()
         return;
     }
 
-    for (const QString &delta : m_parser.ingest(data)) {
-        if (!delta.isEmpty())
-            emit tokenReceived(delta);
+    for (const SSEParser::Event &ev : m_parser.ingest(data)) {
+        if (!ev.content.isEmpty())
+            emit tokenReceived(ev.content);
+
+        // tool_calls 的 arguments 是跨帧逐字拼的，按 index 累加
+        for (const auto &d : ev.toolCalls) {
+            PendingToolCall &slot = m_pendingCalls[d.index];
+            if (!d.id.isEmpty())
+                slot.id = d.id;
+            if (!d.name.isEmpty())
+                slot.name = d.name;
+            slot.arguments += d.arguments;
+        }
     }
 }
 
@@ -144,6 +169,8 @@ void BailianProvider::setOption(const QString &key, const QVariant &value)
         m_temperature = qBound(0.0, value.toDouble(), 2.0);
     else if (key == QLatin1String("max_tokens"))
         m_maxTokens = qBound(1, value.toInt(), 32768);
+    else if (key == QLatin1String("tools_enabled"))
+        m_enableTools = value.toBool();
     // 其余 key 静默忽略
 }
 
@@ -251,6 +278,25 @@ void BailianProvider::onFinished()
     if (m_errored) {
         m_reply->deleteLater();
         m_reply = nullptr;
+        return;
+    }
+
+    // 模型要求调用工具：本轮到此为止，交给上层执行后再发起下一轮
+    if (!m_pendingCalls.isEmpty()) {
+        QJsonArray calls;
+        for (auto it = m_pendingCalls.cbegin(); it != m_pendingCalls.cend(); ++it) {
+            calls.append(QJsonObject{
+                {QStringLiteral("id"), it->id},
+                {QStringLiteral("type"), QStringLiteral("function")},
+                {QStringLiteral("function"),
+                 QJsonObject{{QStringLiteral("name"), it->name},
+                             {QStringLiteral("arguments"), it->arguments}}},
+            });
+        }
+        m_pendingCalls.clear();
+        m_reply->deleteLater();
+        m_reply = nullptr;
+        emit toolCallsReady(calls);
         return;
     }
 

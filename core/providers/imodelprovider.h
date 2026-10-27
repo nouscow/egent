@@ -1,6 +1,7 @@
 #ifndef BAILIAN_IMODELPROVIDER_H
 #define BAILIAN_IMODELPROVIDER_H
 
+#include <QJsonArray>
 #include <QObject>
 #include <QVariant>
 #include "core/models.h"
@@ -43,6 +44,14 @@ public:
 
 signals:
     void tokenReceived(const QString &delta);
+
+    /**
+     * 模型决定调用工具（本轮流式到此为止）。
+     * toolCalls 是 OpenAI 的 tool_calls 数组，调用方执行后把结果以
+     * role=Tool 的消息追加进历史，再发起下一轮。
+     * 发出本信号后**不会**再发 finished()。
+     */
+    void toolCallsReady(const QJsonArray &toolCalls);
     void finished();
     void errorOccurred(const QString &message);
 };

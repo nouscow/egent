@@ -2,7 +2,10 @@
 
 #include <QDialog>
 
+class QCheckBox;
 class QDoubleSpinBox;
+class QLineEdit;
+class QPushButton;
 class QSpinBox;
 
 /**
@@ -27,10 +30,17 @@ public:
     int maxTokens() const;
     int timeoutSeconds() const;
 
+    /** Agent 只读工具是否启用 */
+    bool agentEnabled() const;
+    /** 工作区根目录（Agent 只能访问其下） */
+    QString workspace() const;
+
 private:
     void buildUi();
 
     QDoubleSpinBox *m_temperature = nullptr;
     QSpinBox *m_maxTokens = nullptr;
     QSpinBox *m_timeoutSec = nullptr;
+    QCheckBox *m_agentEnabled = nullptr;
+    QLineEdit *m_workspace = nullptr;
 };

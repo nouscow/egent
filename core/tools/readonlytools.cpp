@@ -45,15 +45,22 @@ QString ListDirTool::description() const
 
 QJsonObject ListDirTool::parametersSchema() const
 {
-    QJsonObject props{{QStringLiteral("path"),
-                       stringProp(QStringLiteral("相对工作区的目录路径，省略则为工作区根目录"))}};
+    QJsonObject pathProp =
+        stringProp(QStringLiteral("相对工作区的目录路径，省略或留空表示工作区根目录"));
+    pathProp.insert(QStringLiteral("default"), QStringLiteral("."));
+
+    const QJsonObject props{{QStringLiteral("path"), pathProp}};
     return QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
                        {QStringLiteral("properties"), props}};
 }
 
 ToolResult ListDirTool::execute(const QJsonObject &args)
 {
-    const QString rel = args.value(QStringLiteral("path")).toString(QStringLiteral("."));
+    // 模型经常把可选参数传成空字符串而不是省略，这里兜一手：
+    // 空路径按工作区根处理，比直接报「路径为空」更有用
+    QString rel = args.value(QStringLiteral("path")).toString().trimmed();
+    if (rel.isEmpty())
+        rel = QStringLiteral(".");
 
     QString err;
     const QString dir = PathGuard::instance().resolve(rel, &err);
@@ -163,7 +170,9 @@ ToolResult SearchTextTool::execute(const QJsonObject &args)
     if (query.isEmpty())
         return ToolResult::failure(QStringLiteral("缺少 query 参数"));
 
-    const QString rel = args.value(QStringLiteral("path")).toString(QStringLiteral("."));
+    QString rel = args.value(QStringLiteral("path")).toString().trimmed();
+    if (rel.isEmpty())
+        rel = QStringLiteral(".");
 
     QString err;
     const QString root = PathGuard::instance().resolve(rel, &err);
