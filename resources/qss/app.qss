@@ -233,6 +233,7 @@ QCheckBox::indicator:hover {
 QCheckBox::indicator:checked {
     background: {{accent}};
     border-color: {{accent}};
+    image: url(:/icons/check.svg);
 }
 
 QCheckBox::indicator:disabled {

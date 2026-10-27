@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(egent LANGUAGES CXX)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network Sql LinguistTools)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network Sql LinguistTools Svg)
 
 qt_standard_project_setup()
 
@@ -80,6 +80,10 @@ qt_add_resources(egent "theme_assets"
         resources/themes/dark.json
         resources/themes/light.json
         resources/qss/app.qss
+        resources/icons/check.svg
+        resources/icons/send.svg
+        resources/icons/stop.svg
+        resources/icons/settings.svg
 )
 
 qt_add_translations(
@@ -91,6 +95,7 @@ target_link_libraries(egent
     PRIVATE
         egent_core
         Qt::Widgets
+        Qt::Svg
 )
 
 install(TARGETS egent

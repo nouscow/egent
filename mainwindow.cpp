@@ -36,6 +36,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
+#include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMessageBox>
@@ -199,8 +200,10 @@ void MainWindow::buildUi()
             this, &MainWindow::onThemeSelected);
     toolLayout->addWidget(m_themeBox);
 
-    auto *settingsBtn = new QPushButton(QStringLiteral("⚙"), toolbar);
+    auto *settingsBtn = new QPushButton(toolbar);
     settingsBtn->setObjectName(QStringLiteral("iconButton"));
+    settingsBtn->setIcon(QIcon(QStringLiteral(":/icons/settings.svg")));
+    settingsBtn->setIconSize(QSize(18, 18));
     settingsBtn->setFixedSize(34, 34);
     settingsBtn->setToolTip(QStringLiteral("参数设置（temperature / max_tokens / 超时）"));
     connect(settingsBtn, &QPushButton::clicked, this, &MainWindow::openSettings);
@@ -238,6 +241,8 @@ void MainWindow::buildUi()
 
     m_sendBtn = new QPushButton(QStringLiteral("发送"), inputWrap);
     m_sendBtn->setObjectName(QStringLiteral("sendButton"));
+    m_sendBtn->setIcon(QIcon(QStringLiteral(":/icons/send.svg")));
+    m_sendBtn->setIconSize(QSize(17, 17));
     m_sendBtn->setFixedSize(88, 40);
     connect(m_sendBtn, &QPushButton::clicked, this, &MainWindow::onSendClicked);
     inputLayout->addWidget(m_sendBtn, 0, Qt::AlignBottom);
@@ -433,6 +438,7 @@ void MainWindow::startRequest(const QList<Message> &history)
         return;
     // 先切按钮再发请求：若 send 同步失败，onProviderError 会把文字改回来
     m_sendBtn->setText(QStringLiteral("停止"));
+    m_sendBtn->setIcon(QIcon(QStringLiteral(":/icons/stop.svg")));
     m_provider->setOption(QStringLiteral("enable_thinking"),
                           m_thinkingBox && m_thinkingBox->isChecked());
     m_agentLoop->setModel(m_modelBox->currentText());
@@ -767,8 +773,10 @@ void MainWindow::onProviderFinished()
     }
 
     m_streamingMsgIndex = -1;
-    if (m_sendBtn)
+    if (m_sendBtn) {
         m_sendBtn->setText(QStringLiteral("发送"));
+        m_sendBtn->setIcon(QIcon(QStringLiteral(":/icons/send.svg")));
+    }
 }
 
 void MainWindow::onProviderError(const QString &msg)
@@ -782,8 +790,10 @@ void MainWindow::onProviderError(const QString &msg)
                                                          : (m_messages.size() - 1),
                                  m_messages.at(m_messages.size() - 1).second);
     }
-    if (m_sendBtn)
+    if (m_sendBtn) {
         m_sendBtn->setText(QStringLiteral("发送"));
+        m_sendBtn->setIcon(QIcon(QStringLiteral(":/icons/send.svg")));
+    }
 }
 
 void MainWindow::renderChat()
