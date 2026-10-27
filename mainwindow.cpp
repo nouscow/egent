@@ -133,6 +133,12 @@ void MainWindow::buildUi()
             this, &MainWindow::onSessionContextMenu);
     sideLayout->addWidget(m_sessionList, 1);
 
+    // 文档要求左栏底部展示额度，接口尚未接入，先占位
+    auto *quota = new QLabel(QStringLiteral("免费额度 · 未接入"), sidebar);
+    quota->setObjectName(QStringLiteral("quotaLabel"));
+    quota->setToolTip(QStringLiteral("接入百炼用量接口后在此显示剩余额度"));
+    sideLayout->addWidget(quota);
+
     outer->addWidget(sidebar);
 
     // ---------- 右侧：对话区 ----------
@@ -155,9 +161,6 @@ void MainWindow::buildUi()
     title->setObjectName(QStringLiteral("toolbarTitle"));
     toolLayout->addWidget(title);
 
-    auto *hint = new QLabel(QStringLiteral("本地客户端 · M3 本地会话"), toolbar);
-    hint->setObjectName(QStringLiteral("hintLabel"));
-    toolLayout->addWidget(hint);
     toolLayout->addStretch(1);
 
     m_modelBox = new QComboBox(toolbar);
@@ -165,6 +168,7 @@ void MainWindow::buildUi()
                           QStringLiteral("qwen3.8-max"),
                           QStringLiteral("deepseek-v4.1-flash")});
     m_modelBox->setToolTip(QStringLiteral("模型选择（实时生效）"));
+    m_modelBox->setFixedWidth(150);
     toolLayout->addWidget(m_modelBox);
 
     m_themeBox = new QComboBox(toolbar);
@@ -178,6 +182,7 @@ void MainWindow::buildUi()
         m_themeBox->setCurrentIndex(current);
         m_themeBox->blockSignals(false);
     }
+    m_themeBox->setFixedWidth(96);
     m_themeBox->setToolTip(QStringLiteral("切换主题（运行时即时生效）"));
     connect(m_themeBox, &QComboBox::currentIndexChanged,
             this, &MainWindow::onThemeSelected);

@@ -41,7 +41,7 @@
   "component": {
     "chat.userBubble.bg": "accent",
     "chat.userBubble.text": "text.onAccent",
-    "chat.assistantBubble.bg": "bg.elevated",
+    "chat.assistantBubble.bg": "gray-100",
     "chat.assistantBubble.text": "text.primary",
     "avatar.user.bg": "accent",
     "avatar.user.text": "text.onAccent",

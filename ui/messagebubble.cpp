@@ -46,7 +46,7 @@ void MessageBubble::buildUi(const QString &text)
     }
 
     auto *row = new QHBoxLayout(this);
-    row->setContentsMargins(0, 6, 0, 6);
+    row->setContentsMargins(0, 8, 0, 8);
     row->setSpacing(10);
 
     // 头像支持图片/文字两种形态，图片由 AvatarStore 统一管理（当前还没有设置入口，
@@ -114,8 +114,8 @@ void MessageBubble::setText(const QString &text)
     for (const QString &line : lines)
         contentWidth = qMax(contentWidth, fm.horizontalAdvance(line));
 
-    // 32 ≈ 左右 padding（QSS 里的 14px×2）再留一点余量
-    const int width = qBound(72, contentWidth + 32, kBubbleMaxWidth);
+    // 36 ≈ 左右 padding（QSS 里的 16px×2）再留一点余量
+    const int width = qBound(72, contentWidth + 36, kBubbleMaxWidth);
     if (m_bubble->minimumWidth() != width) {
         m_bubble->setMinimumWidth(width);
         m_bubble->updateGeometry();
