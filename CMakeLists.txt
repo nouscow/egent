@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(egent LANGUAGES CXX)
+project(egent VERSION 0.1.0 LANGUAGES CXX)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network Sql LinguistTools Svg)
 
@@ -95,6 +95,8 @@ qt_add_translations(
     TS_FILES egent_zh_CN.ts
 )
 
+target_compile_definitions(egent PRIVATE EGENT_VERSION="${PROJECT_VERSION}")
+
 target_link_libraries(egent
     PRIVATE
         egent_core
@@ -107,6 +109,13 @@ install(TARGETS egent
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+# LGPLv3 要求随分发附带许可文本
+install(FILES licenses/LGPL-3.0-only.txt
+    DESTINATION .
+    RENAME LICENSE-Qt-LGPLv3.txt
+)
+install(FILES README.md DESTINATION .)
 
 qt_generate_deploy_app_script(
     TARGET egent

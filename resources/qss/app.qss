@@ -395,3 +395,14 @@ QLabel#emptyHint {
     font-size: {{font.size.small}}px;
     line-height: 22px;
 }
+
+/* ---------- 关于入口 ---------- */
+QLabel#aboutLabel {
+    color: {{text.placeholder}};
+    font-size: {{font.size.small}}px;
+}
+
+QLabel#aboutLabel a {
+    color: {{accent}};
+    text-decoration: none;
+}

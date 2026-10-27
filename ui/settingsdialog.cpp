@@ -8,6 +8,7 @@
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -147,6 +148,17 @@ void SettingsDialog::buildUi()
     hint->setObjectName(QStringLiteral("hintLabel"));
     root->addWidget(hint);
 
+    // 关于入口：LGPLv3 要求向用户显著声明使用了 Qt
+    auto *about = new QLabel(this);
+    about->setObjectName(QStringLiteral("aboutLabel"));
+    about->setTextFormat(Qt::RichText);
+    about->setText(QStringLiteral("<a href=\"about\">关于 Egent %1</a>")
+                       .arg(QStringLiteral(EGENT_VERSION)));
+    about->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    about->setOpenExternalLinks(false);
+    connect(about, &QLabel::linkActivated, this, &SettingsDialog::showAbout);
+    root->addWidget(about);
+
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          this);
     // 默认是英文 OK/Cancel，与界面其余中文不统一
@@ -261,4 +273,20 @@ bool SettingsDialog::writeEnabled() const
 int SettingsDialog::fontSize() const
 {
     return m_fontSize->currentData().toInt();
+}
+
+void SettingsDialog::showAbout()
+{
+    QMessageBox::about(
+        this, QStringLiteral("关于 Egent"),
+        QStringLiteral(
+            "<h3>Egent %1</h3>"
+            "<p>本地 AI 客户端 · 多厂商对话与工具调用</p>"
+            "<p style='color:#8a8f99'>构建于 Qt %2</p>"
+            "<hr>"
+            "<p>本程序按 <b>LGPLv3</b> 使用 Qt：未修改 Qt 源码，"
+            "采用动态链接并保留独立 DLL 以便替换。</p>"
+            "<p>许可全文见程序目录下的 <code>LICENSE-Qt-LGPLv3.txt</code>。<br>"
+            "Qt 源码获取：https://www.qt.io/download-open-source</p>")
+            .arg(QStringLiteral(EGENT_VERSION), QString::fromLatin1(qVersion())));
 }

@@ -46,6 +46,7 @@ public:
 
 private:
     void buildUi();
+    void showAbout();
 
     QDoubleSpinBox *m_temperature = nullptr;
     QSpinBox *m_maxTokens = nullptr;
