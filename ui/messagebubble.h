@@ -21,7 +21,7 @@ class MessageBubble : public QWidget
     Q_OBJECT
 
 public:
-    enum class Role { User, Assistant };
+    enum class Role { User, Assistant, Tool };
 
     MessageBubble(Role role, const QString &text, QWidget *parent = nullptr);
 

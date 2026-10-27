@@ -27,8 +27,13 @@ public:
     /** 追加一条消息，返回其指针，便于随后流式更新 */
     MessageBubble *appendMessage(const QString &role, const QString &text);
 
+    /** 在指定位置插入（工具卡片要插在正在生成的回答之前） */
+    MessageBubble *insertMessage(int index, const QString &role, const QString &text);
+
     /** 更新最后一条消息的内容（流式用） */
     void updateLastText(const QString &text);
+    /** 按索引更新（气泡顺序与消息列表一一对应，比「最后一条」更可靠） */
+    void updateTextAt(int index, const QString &text);
 
     int count() const { return m_bubbles.size(); }
 

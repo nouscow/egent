@@ -10,6 +10,7 @@
 #include <QContextMenuEvent>
 #include <QPlainTextEdit>
 #include <QScreen>
+#include <QSettings>
 #include <QTimer>
 #include <QTranslator>
 
@@ -48,6 +49,15 @@ int main(int argc, char *argv[])
     const int avAiIdx = args.indexOf(QStringLiteral("--avatar-assistant"));
     if (avAiIdx > 0 && avAiIdx + 1 < args.size())
         AvatarStore::instance().setImagePath(QStringLiteral("assistant"), args.at(avAiIdx + 1));
+
+    // 调试用：--workspace <dir> 临时启用 Agent 并指定工作区（会写入设置）
+    const int wsIdx = args.indexOf(QStringLiteral("--workspace"));
+    if (wsIdx > 0 && wsIdx + 1 < args.size()) {
+        QSettings st(QStringLiteral("egent"), QStringLiteral("egent"));
+        const QString ws = args.at(wsIdx + 1);
+        st.setValue(QStringLiteral("agent/workspace"), ws);
+        st.setValue(QStringLiteral("agent/enabled"), !ws.isEmpty());
+    }
 
     MainWindow w;
     w.show();
@@ -122,7 +132,7 @@ int main(int argc, char *argv[])
     if (shotIdx > 0 && shotIdx + 1 < args.size()) {
         const QString path = args.at(shotIdx + 1);
         // 自动发消息时留足流式时间，否则 1.2 秒就够画静态界面
-        const int delay = hasAutoSend ? 6000 : 1200;
+        const int delay = hasAutoSend ? 18000 : 1200;
         QTimer::singleShot(delay, [&w, path]() {
             const bool ok = w.grab().save(path);
             qInfo().noquote() << (ok ? "[shot] 已保存:" : "[shot] 保存失败:") << path;

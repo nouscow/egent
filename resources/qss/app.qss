@@ -266,6 +266,15 @@ QWidget[role="assistantBubble"] {
     padding: 10px 14px;
 }
 
+QWidget[role="toolBubble"] {
+    background: {{bg.elevated}};
+    color: {{text.secondary}};
+    border: 1px dashed {{border.default}};
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
 /* 头像由 AvatarWidget 自绘：
    圆形裁剪 QPixmap 用 QSS 的 border-radius 做不到，所以不在这里定义样式，
    颜色统一取自 avatar.* 令牌（见 ui/avatarwidget.cpp）。 */

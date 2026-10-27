@@ -24,6 +24,24 @@ void MessageBubble::buildUi(const QString &text)
 {
     const bool isUser = (m_role == Role::User);
 
+    // 工具调用：没有头像，做成一条整宽的小卡片，和助手气泡左缘对齐
+    if (m_role == Role::Tool) {
+        auto *col = new QVBoxLayout(this);
+        col->setContentsMargins(52, 3, 16, 3);
+
+        m_bubble = new QLabel(this);
+        m_bubble->setWordWrap(true);
+        m_bubble->setTextFormat(Qt::PlainText);
+        m_bubble->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        m_bubble->setAttribute(Qt::WA_StyledBackground, true);
+        m_bubble->setProperty("role", "toolBubble");
+        m_bubble->setContextMenuPolicy(Qt::NoContextMenu);
+        col->addWidget(m_bubble);
+
+        setText(text);
+        return;
+    }
+
     auto *row = new QHBoxLayout(this);
     row->setContentsMargins(0, 6, 0, 6);
     row->setSpacing(10);
@@ -71,6 +89,10 @@ void MessageBubble::buildUi(const QString &text)
 void MessageBubble::setText(const QString &text)
 {
     m_bubble->setText(text);
+
+    // 工具卡片占满整行，不需要按内容算宽度
+    if (m_role == Role::Tool)
+        return;
 
     // QLabel 一旦 setWordWrap(true)，尺寸策略会倾向「最小宽度」，
     // 结果是气泡被压成很窄的一条。这里按最长一行显式算宽度，

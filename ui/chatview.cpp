@@ -43,21 +43,30 @@ void ChatView::rebuild(const QList<QPair<QString, QString>> &messages)
 
 MessageBubble *ChatView::appendMessage(const QString &role, const QString &text)
 {
-    const auto r = (role == QLatin1String("user")) ? MessageBubble::Role::User
-                                                   : MessageBubble::Role::Assistant;
+    return insertMessage(m_bubbles.size(), role, text);
+}
+
+MessageBubble *ChatView::insertMessage(int index, const QString &role, const QString &text)
+{
+    index = qBound(0, index, m_bubbles.size());
+
+    MessageBubble::Role r = MessageBubble::Role::Assistant;
+    if (role == QLatin1String("user"))
+        r = MessageBubble::Role::User;
+    else if (role == QLatin1String("tool"))
+        r = MessageBubble::Role::Tool;
+
     auto *bubble = new MessageBubble(r, text, m_container);
 
-    // 插到末尾弹簧之前，保证消息从顶部开始排
-    m_layout->insertWidget(m_layout->count() - 1, bubble);
+    // 布局里 0..n-1 是气泡，最后一项是弹簧，插到这个区间即可
+    m_layout->insertWidget(index, bubble);
+    m_bubbles.insert(index, bubble);
 
-    // 记录索引后把气泡的右键动作转发出层
-    const int index = m_bubbles.size();
     connect(bubble, &MessageBubble::copyRequested, this, &ChatView::copyRequested);
-    connect(bubble, &MessageBubble::regenerateRequested, this, [this, index]() {
-        emit regenerateRequested(index);
+    // 用指针反查索引：插入会让后面所有气泡的序号变化，捕获固定索引必然错位
+    connect(bubble, &MessageBubble::regenerateRequested, this, [this, bubble]() {
+        emit regenerateRequested(m_bubbles.indexOf(bubble));
     });
-
-    m_bubbles.append(bubble);
 
     scrollToBottom();
     return bubble;
@@ -65,9 +74,14 @@ MessageBubble *ChatView::appendMessage(const QString &role, const QString &text)
 
 void ChatView::updateLastText(const QString &text)
 {
-    if (m_bubbles.isEmpty())
+    updateTextAt(m_bubbles.size() - 1, text);
+}
+
+void ChatView::updateTextAt(int index, const QString &text)
+{
+    if (index < 0 || index >= m_bubbles.size())
         return;
-    m_bubbles.last()->setText(text);
+    m_bubbles.at(index)->setText(text);
     scrollToBottom();
 }
 

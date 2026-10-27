@@ -421,17 +421,38 @@ void MainWindow::startRequest(const QList<Message> &history)
 
 void MainWindow::onToolStarted(const QString &name, const QString &argsJson)
 {
-    statusBar()->showMessage(
-        QStringLiteral("⚙ 正在调用 %1 %2").arg(name, argsJson.left(80)));
+    // 工具调用发生在「最终回答」之前，所以卡片要插在正在生成的那条回答前面
+    const QString text =
+        QStringLiteral("⚙ %1  ·  执行中…\n%2").arg(name, argsJson.left(300));
+
+    int at = (m_streamingMsgIndex >= 0) ? m_streamingMsgIndex : m_messages.size();
+    m_messages.insert(at, {QStringLiteral("tool"), text});
+    m_chatView->insertMessage(at, QStringLiteral("tool"), text);
+
+    // 助手气泡被推到后面一位，流式刷新的索引要跟着走
+    if (m_streamingMsgIndex >= 0)
+        ++m_streamingMsgIndex;
 }
 
 void MainWindow::onToolFinished(const QString &name, bool ok, const QString &result)
 {
-    statusBar()->showMessage(
-        QStringLiteral("⚙ %1 %2：%3")
-            .arg(name, ok ? QStringLiteral("完成") : QStringLiteral("失败"),
-                 result.left(60).replace(QLatin1Char('\n'), QLatin1Char(' '))),
-        4000);
+    // 卡片的索引不再固定是「最后一条」——助手气泡排在它后面
+    int idx = -1;
+    for (int i = m_messages.size() - 1; i >= 0; --i) {
+        if (m_messages.at(i).first == QLatin1String("tool")) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0)
+        return;
+
+    const QString text = QStringLiteral("⚙ %1  ·  %2\n%3")
+                             .arg(name,
+                                  ok ? QStringLiteral("成功") : QStringLiteral("失败"),
+                                  result.left(500));
+    m_messages[idx].second = text;
+    m_chatView->updateTextAt(idx, text);
 }
 
 void MainWindow::onCopyMessage(const QString &text)
@@ -631,8 +652,12 @@ void MainWindow::onSendClicked()
     // 构造历史：必须包含刚加入的 user 消息，但**不能**包含末尾那个空的 assistant 占位，
     // 否则模型收到的历史里没有本次提问（这是个极易漏掉的顺序问题）。
     QList<Message> history;
-    for (int i = 0; i < m_streamingMsgIndex; ++i)
+    for (int i = 0; i < m_streamingMsgIndex; ++i) {
+        // 工具卡片只是给人看的，模型上下文里的 tool 消息由 AgentLoop 自己管
+        if (m_messages.at(i).first == QLatin1String("tool"))
+            continue;
         history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second});
+    }
 
     // ---- 落库：先确保有会话，再写入这条提问 ----
     const int sid = ensureSession();
@@ -665,7 +690,8 @@ void MainWindow::flushStream()
     if (!m_streamBuf.isEmpty()) {
         m_messages[m_streamingMsgIndex].second += m_streamBuf;
         m_streamBuf.clear();
-        m_chatView->updateLastText(m_messages.at(m_streamingMsgIndex).second);
+        m_chatView->updateTextAt(m_streamingMsgIndex,
+                                 m_messages.at(m_streamingMsgIndex).second);
     }
 }
 
@@ -694,7 +720,9 @@ void MainWindow::onProviderError(const QString &msg)
         m_messages[m_streamingMsgIndex].second = QStringLiteral("⚠ 出错：") + msg;
         m_streamBuf.clear();
         m_streamingMsgIndex = -1;
-        m_chatView->updateLastText(m_messages.at(m_messages.size() - 1).second);
+        m_chatView->updateTextAt(m_streamingMsgIndex >= 0 ? m_streamingMsgIndex
+                                                         : (m_messages.size() - 1),
+                                 m_messages.at(m_messages.size() - 1).second);
     }
     if (m_sendBtn)
         m_sendBtn->setText(QStringLiteral("发送"));
