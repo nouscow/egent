@@ -59,6 +59,13 @@ private slots:
     void onProviderError(const QString &msg);
     void flushStream();
 
+    /** 工具栏「生成图片」：弹窗取提示词 → 调 provider 生图 */
+    void onGenerateImage();
+    /** 生图成功：用对话框展示结果（可保存） */
+    void onImageReady(const QByteArray &imageData, const QString &prompt);
+    /** 生图失败 */
+    void onImageError(const QString &message);
+
 private:
     void buildUi();
     /** 用当前主题令牌重新渲染整个对话区（切换主题时旧内容也要变色） */

@@ -32,6 +32,19 @@ public:
     virtual void cancel() {}
 
     /**
+     * 生成图片（文生图）。默认实现直接报错，由支持生图的厂商覆写。
+     * 结果通过 imageReady / imageError 信号返回（非流式）。
+     * @param prompt       用户提示词
+     * @param workspaceId  百炼 MaaS 推理工作空间 ID（生图端点需要）
+     */
+    virtual void generateImage(const QString &prompt, const QString &workspaceId)
+    {
+        Q_UNUSED(prompt)
+        Q_UNUSED(workspaceId)
+        emit imageError(QStringLiteral("当前厂商不支持生成图片。"));
+    }
+
+    /**
      * 厂商无关的调参入口（可选实现）。
      * 约定 key 用小写蛇形，如 "enable_thinking" / "temperature"；
      * 不认识的 key 必须静默忽略，不能报错——各厂商能力本来就不一样。
@@ -55,6 +68,10 @@ signals:
 
     /** 命中限流，正在按退避策略重试（attempt 从 1 开始） */
     void retrying(int attempt, int delayMs);
+    /** 图片生成成功（非流式，整张一次返回）。imageData 为图片原始字节（PNG/JPG） */
+    void imageReady(const QByteArray &imageData, const QString &prompt);
+    /** 图片生成失败 */
+    void imageError(const QString &message);
     void finished();
     void errorOccurred(const QString &message);
 };

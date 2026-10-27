@@ -43,6 +43,8 @@
 #include <QJsonObject>
 #include <QMessageBox>
 #include <QTextStream>
+#include <QDialog>
+#include <QPixmap>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -87,6 +89,10 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::onToolFinished);
     connect(m_agentLoop, &AgentLoop::permissionRequired,
             this, &MainWindow::onPermissionRequired);
+
+    // 图片生成结果（与对话流式走不同信号，互不影响）
+    connect(m_provider, &IModelProvider::imageReady, this, &MainWindow::onImageReady);
+    connect(m_provider, &IModelProvider::imageError, this, &MainWindow::onImageError);
 
     // 限流重试在状态栏提示，避免用户以为卡住
     connect(m_provider, &IModelProvider::retrying, this,
@@ -253,6 +259,13 @@ void MainWindow::buildUi()
         QStringLiteral("默认关闭：实测同一问题首字 0.6s vs 7.5s。\n"
                        "遇到需要推敲的难题再打开。"));
     toolLayout->addWidget(m_thinkingBox);
+
+    auto *genImageBtn = new QPushButton(QStringLiteral("生成图片"), toolbar);
+    genImageBtn->setObjectName(QStringLiteral("genImageButton"));
+    genImageBtn->setFixedHeight(34);
+    genImageBtn->setToolTip(QStringLiteral("文生图（百炼通义万相 qwen-image-3.0）"));
+    connect(genImageBtn, &QPushButton::clicked, this, &MainWindow::onGenerateImage);
+    toolLayout->addWidget(genImageBtn);
 
     root->addWidget(toolbar);
 
@@ -573,6 +586,13 @@ void MainWindow::onProviderSelected(int index)
     m_provider = p;
     if (m_agentLoop)
         m_agentLoop->setProvider(p);
+    // 重新绑定生图信号到新 provider（旧连接先解绑，避免重复触发）
+    if (m_provider) {
+        disconnect(m_provider, &IModelProvider::imageReady, this, &MainWindow::onImageReady);
+        disconnect(m_provider, &IModelProvider::imageError, this, &MainWindow::onImageError);
+        connect(m_provider, &IModelProvider::imageReady, this, &MainWindow::onImageReady);
+        connect(m_provider, &IModelProvider::imageError, this, &MainWindow::onImageError);
+    }
     refreshModelList();
     applyParamsFromSettings(); // 新厂商的 Key / 工具开关重新下发
 }
@@ -1022,6 +1042,73 @@ void MainWindow::onProviderError(const QString &msg)
         m_sendBtn->setText(QStringLiteral("发送"));
         m_sendBtn->setIcon(QIcon(QStringLiteral(":/icons/send.svg")));
     }
+}
+
+void MainWindow::onGenerateImage()
+{
+    if (!m_provider)
+        return;
+
+    bool ok = false;
+    const QString prompt = QInputDialog::getText(
+        this, QStringLiteral("生成图片"),
+        QStringLiteral("描述你想生成的画面（中文或英文均可）："),
+        QLineEdit::Normal, QString(), &ok);
+    if (!ok || prompt.trimmed().isEmpty())
+        return;
+
+    QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    const QString wsId = s.value(QStringLiteral("image/workspace_id")).toString().trimmed();
+    statusBar()->showMessage(QStringLiteral("正在生成图片…"));
+    m_provider->generateImage(prompt.trimmed(), wsId);
+}
+
+void MainWindow::onImageReady(const QByteArray &imageData, const QString &prompt)
+{
+    statusBar()->clearMessage();
+
+    QPixmap image;
+    if (!image.loadFromData(imageData)) {
+        QMessageBox::warning(this, QStringLiteral("生成失败"),
+                             QStringLiteral("图片解码失败。"));
+        return;
+    }
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("生成结果"));
+    dlg.setModal(true);
+
+    auto *imgLabel = new QLabel(&dlg);
+    imgLabel->setPixmap(image.scaledToWidth(480, Qt::SmoothTransformation));
+    imgLabel->setAlignment(Qt::AlignCenter);
+
+    auto *saveBtn = new QPushButton(QStringLiteral("保存图片…"), &dlg);
+    auto *closeBtn = new QPushButton(QStringLiteral("关闭"), &dlg);
+    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    connect(saveBtn, &QPushButton::clicked, [&dlg, &image]() {
+        const QString path = QFileDialog::getSaveFileName(
+            &dlg, QStringLiteral("保存图片"), QString(),
+            QStringLiteral("PNG 图片 (*.png);;所有文件 (*)"));
+        if (!path.isEmpty())
+            image.save(path, "PNG");
+    });
+
+    auto *btnRow = new QHBoxLayout;
+    btnRow->addStretch(1);
+    btnRow->addWidget(saveBtn);
+    btnRow->addWidget(closeBtn);
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->addWidget(imgLabel);
+    root->addWidget(new QLabel(prompt, &dlg));
+    root->addLayout(btnRow);
+    dlg.exec();
+}
+
+void MainWindow::onImageError(const QString &message)
+{
+    statusBar()->clearMessage();
+    QMessageBox::warning(this, QStringLiteral("生成失败"), message);
 }
 
 void MainWindow::renderChat()

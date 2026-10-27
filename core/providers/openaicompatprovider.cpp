@@ -220,6 +220,145 @@ void OpenAiCompatProvider::setOption(const QString &key, const QVariant &value)
     // 其余 key 静默忽略
 }
 
+void OpenAiCompatProvider::generateImage(const QString &prompt, const QString &workspaceId)
+{
+    // 生图走百炼 MaaS 多模态生成接口，与 OpenAI 兼容 chat 完全不同，
+    // 目前只有百炼配置支持；其它厂商直接报错（接口默认实现已做，这里再兜底一次）。
+    if (m_config.id != QLatin1String("bailian")) {
+        emit imageError(QStringLiteral("当前厂商不支持生成图片，请切到百炼。"));
+        return;
+    }
+
+    const QString key = apiKey();
+    if (key.isEmpty()) {
+        emit imageError(QStringLiteral(
+            "未找到 API Key：请在设置里填写，或设置环境变量 DASHSCOPE_API_KEY。"));
+        return;
+    }
+    if (workspaceId.isEmpty()) {
+        emit imageError(QStringLiteral(
+            "未设置生图工作区 ID（百炼 MaaS 推理工作空间）。\n"
+            "请在「参数设置 → 生图工作区 ID」填写，例如 wk-xxxx。"));
+        return;
+    }
+
+    // 请求体遵循百炼「通义万相」图像生成：input.messages[].content[].text
+    QJsonObject content;
+    content.insert(QStringLiteral("text"), prompt);
+    QJsonObject msg;
+    msg.insert(QStringLiteral("role"), QStringLiteral("user"));
+    msg.insert(QStringLiteral("content"), QJsonArray{content});
+    QJsonObject input;
+    input.insert(QStringLiteral("messages"), QJsonArray{msg});
+    QJsonObject body;
+    body.insert(QStringLiteral("model"), QStringLiteral("qwen-image-3.0"));
+    body.insert(QStringLiteral("input"), input);
+
+    const QUrl url(QStringLiteral(
+        "https://%1.cn-beijing.maas.aliyuncs.com"
+        "/api/v1/services/aigc/multimodal-generation/generation")
+        .arg(workspaceId));
+
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    req.setRawHeader("Authorization", ("Bearer " + key).toUtf8());
+
+    if (m_imgReply) {
+        m_imgReply->disconnect(this);
+        m_imgReply->deleteLater();
+        m_imgReply = nullptr;
+    }
+    m_imgPrompt = prompt;
+    m_imgReply = m_nam->post(req, QJsonDocument(body).toJson());
+    connect(m_imgReply, &QNetworkReply::finished,
+            this, &OpenAiCompatProvider::onImageReplyFinished);
+    connect(m_imgReply, &QNetworkReply::errorOccurred, this,
+            [this](QNetworkReply::NetworkError) {
+                emit imageError(QStringLiteral("生图请求失败：网络连接错误。"));
+            });
+}
+
+void OpenAiCompatProvider::onImageReplyFinished()
+{
+    if (!m_imgReply)
+        return;
+    const int status =
+        m_imgReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QByteArray data = m_imgReply->readAll();
+    m_imgReply->deleteLater();
+    m_imgReply = nullptr;
+
+    if (status >= 400) {
+        emit imageError(serverMessage(data).isEmpty()
+                            ? QStringLiteral("生图请求失败（HTTP %1）。").arg(status)
+                            : serverMessage(data));
+        return;
+    }
+
+    QJsonParseError err{};
+    const auto doc = QJsonDocument::fromJson(data, &err);
+    if (!doc.isObject()) {
+        emit imageError(QStringLiteral("生图响应解析失败。"));
+        return;
+    }
+
+    // 百炼同步生图通常返回 output.results[].url；兼容 output.image_url / output.url。
+    const QJsonObject root = doc.object();
+    const QJsonObject output = root.value(QStringLiteral("output")).toObject();
+    QString url;
+    const QJsonArray results = output.value(QStringLiteral("results")).toArray();
+    if (!results.isEmpty())
+        url = results.first().toObject().value(QStringLiteral("url")).toString();
+    if (url.isEmpty())
+        url = output.value(QStringLiteral("image_url")).toString();
+    if (url.isEmpty())
+        url = output.value(QStringLiteral("url")).toString();
+
+    if (url.isEmpty()) {
+        // 可能是异步任务（task_status != SUCCEEDED），v1 不做轮询
+        const QString taskStatus =
+            output.value(QStringLiteral("task_status")).toString();
+        emit imageError(taskStatus.isEmpty()
+                            ? QStringLiteral("生图请求已提交，但未返回可直接显示的图片地址。")
+                            : QStringLiteral("生图任务状态：%1，尚未完成，请稍后在百炼控制台查看。")
+                                  .arg(taskStatus));
+        return;
+    }
+
+    QNetworkRequest dl(url);
+    m_imgDl = m_nam->get(dl);
+    connect(m_imgDl, &QNetworkReply::finished,
+            this, &OpenAiCompatProvider::onImageDownloadFinished);
+}
+
+void OpenAiCompatProvider::onImageDownloadFinished()
+{
+    if (!m_imgDl)
+        return;
+    if (m_imgDl->error() != QNetworkReply::NoError) {
+        m_imgDl->deleteLater();
+        m_imgDl = nullptr;
+        emit imageError(QStringLiteral("图片下载失败：网络连接错误。"));
+        return;
+    }
+    const QByteArray img = m_imgDl->readAll();
+    m_imgDl->deleteLater();
+    m_imgDl = nullptr;
+
+    if (img.isEmpty()) {
+        emit imageError(QStringLiteral("图片下载为空。"));
+        return;
+    }
+    // 不用 QtGui 做解码（core 层不链 QtGui），只校验 PNG / JPEG 魔数
+    const bool looksImage =
+        img.startsWith("\x89PNG") || img.startsWith("\xFF\xD8\xFF");
+    if (!looksImage) {
+        emit imageError(QStringLiteral("下载内容不是常见的图片格式。"));
+        return;
+    }
+    emit imageReady(img, m_imgPrompt);
+}
+
 QString OpenAiCompatProvider::serverMessage(const QByteArray &body)
 {
     if (body.isEmpty())

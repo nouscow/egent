@@ -139,6 +139,15 @@ void SettingsDialog::buildUi()
     m_fontSize->setToolTip(QStringLiteral("调整界面正文字号，标题与小字会同步跟随"));
     form->addRow(QStringLiteral("界面字号"), m_fontSize);
 
+    // ---- 生图（百炼 MaaS 推理工作空间 ID）----
+    m_imageWsId = new QLineEdit(this);
+    m_imageWsId->setPlaceholderText(QStringLiteral("如 wk-xxxxxxxx，生图必填"));
+    m_imageWsId->setToolTip(
+        QStringLiteral("百炼「通义万相」文生图走 MaaS 多模态生成接口，\n"
+                       "端点主机名里需要这个推理工作空间 ID。\n"
+                       "在百炼控制台「模型服务 → 推理工作空间」获取。"));
+    form->addRow(QStringLiteral("生图工作区 ID"), m_imageWsId);
+
     root->addLayout(form);
 
     auto *hint = new QLabel(
@@ -205,6 +214,7 @@ void SettingsDialog::loadFromSettings()
     m_fontSize->setCurrentIndex(fi >= 0 ? fi : 1);
     m_agentEnabled->setChecked(s.value(QStringLiteral("agent/enabled"), false).toBool());
     m_workspace->setText(s.value(QStringLiteral("agent/workspace")).toString());
+    m_imageWsId->setText(s.value(QStringLiteral("image/workspace_id")).toString());
     const QString policy = s.value(QStringLiteral("agent/command_policy"),
                                    QStringLiteral("off")).toString();
     const int pi = m_commandPolicy->findData(policy);
@@ -228,6 +238,7 @@ void SettingsDialog::saveToSettings()
     s.setValue(QStringLiteral("agent/command_policy"), m_commandPolicy->currentData().toString());
     s.setValue(QStringLiteral("agent/write_enabled"), m_writeEnabled->isChecked());
     s.setValue(QStringLiteral("ui/font_size"), m_fontSize->currentData().toInt());
+    s.setValue(QStringLiteral("image/workspace_id"), m_imageWsId->text().trimmed());
 }
 
 double SettingsDialog::temperature() const
@@ -273,6 +284,11 @@ bool SettingsDialog::writeEnabled() const
 int SettingsDialog::fontSize() const
 {
     return m_fontSize->currentData().toInt();
+}
+
+QString SettingsDialog::imageWorkspaceId() const
+{
+    return m_imageWsId->text().trimmed();
 }
 
 void SettingsDialog::showAbout()

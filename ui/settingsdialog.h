@@ -43,6 +43,8 @@ public:
     bool writeEnabled() const;
     /** 正文字号（px），0 表示跟随主题默认 */
     int fontSize() const;
+    /** 百炼 MaaS 推理工作空间 ID（生图端点需要） */
+    QString imageWorkspaceId() const;
 
 private:
     void buildUi();
@@ -58,4 +60,5 @@ private:
     class QLabel *m_apiKeyLabel = nullptr;
     QCheckBox *m_writeEnabled = nullptr;
     QComboBox *m_fontSize = nullptr;
+    QLineEdit *m_imageWsId = nullptr;
 };

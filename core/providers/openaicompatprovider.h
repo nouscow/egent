@@ -40,12 +40,15 @@ public:
     void send(const QList<Message> &history, const QString &model) override;
     void cancel() override;
     void setOption(const QString &key, const QVariant &value) override;
+    void generateImage(const QString &prompt, const QString &workspaceId) override;
 
 private slots:
     void onReadyRead();
     void onFinished();
     void onError(QNetworkReply::NetworkError code);
     void onTimeout();
+    void onImageReplyFinished();
+    void onImageDownloadFinished();
 
 private:
     Config m_config;
@@ -55,6 +58,11 @@ private:
 
     SSEParser m_parser;
     bool m_errored = false;
+
+    // ---- 图片生成（百炼 MaaS，非 SSE）----
+    QNetworkReply *m_imgReply = nullptr;   // 生图请求
+    QNetworkReply *m_imgDl = nullptr;      // 图片下载请求
+    QString m_imgPrompt;                   // 本次生图的提示词，随结果一起回传
     bool m_cancelled = false;
     bool m_timedOut = false;
 
