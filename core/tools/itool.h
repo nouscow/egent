@@ -36,4 +36,12 @@ public:
     virtual QJsonObject parametersSchema() const = 0;
 
     virtual ToolResult execute(const QJsonObject &args) = 0;
+
+    /**
+     * 执行前是否必须得到用户许可。
+     * 只读工具返回 false；会改变系统状态的工具（如执行命令）必须返回 true。
+     * 注意：这只是「要不要问」，黑名单之类的硬性拦截在工具内部自己做，
+     * 不受用户确认策略影响。
+     */
+    virtual bool requiresConfirmation() const { return false; }
 };

@@ -1,6 +1,7 @@
 #include "toolregistry.h"
 
 #include "core/tools/readonlytools.h"
+#include "core/tools/runcommandtool.h"
 
 #include <QDebug>
 
@@ -22,16 +23,23 @@ void ToolRegistry::add(std::unique_ptr<ITool> tool)
     m_tools[key] = std::move(tool);
 }
 
-void ToolRegistry::registerDefaults()
+void ToolRegistry::registerDefaults(bool includeCommandTool)
 {
-    if (!m_tools.empty())
-        return; // 幂等
+    // 幂等到「单个工具」而不是整体：先注册了只读工具，
+    // 之后再打开命令执行时，不能因为容器非空就整批跳过。
+    const auto addIfMissing = [this](std::unique_ptr<ITool> tool) {
+        if (tool && m_tools.find(tool->name()) == m_tools.end())
+            add(std::move(tool));
+    };
 
-    add(std::make_unique<ListDirTool>());
-    add(std::make_unique<ReadFileTool>());
-    add(std::make_unique<SearchTextTool>());
+    addIfMissing(std::make_unique<ListDirTool>());
+    addIfMissing(std::make_unique<ReadFileTool>());
+    addIfMissing(std::make_unique<SearchTextTool>());
 
-    qInfo().noquote() << "[tools] 已注册:" << names().join(QStringLiteral(", "));
+    if (includeCommandTool)
+        addIfMissing(std::make_unique<RunCommandTool>());
+
+    qInfo().noquote() << "[tools] 当前可用:" << names().join(QStringLiteral(", "));
 }
 
 ITool *ToolRegistry::find(const QString &name) const

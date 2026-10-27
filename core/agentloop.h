@@ -3,6 +3,7 @@
 #include "core/models.h"
 #include "core/providers/imodelprovider.h"
 
+#include <QEventLoop>
 #include <QJsonArray>
 #include <QList>
 #include <QObject>
@@ -35,6 +36,12 @@ public:
     void start(const QList<Message> &history);
     void cancel();
 
+    /**
+     * 界面在收到 permissionRequired 后调用，回复是否允许执行。
+     * 不回复的话，60 秒后按「拒绝」处理，避免整个对话卡死。
+     */
+    void respondPermission(bool granted);
+
     bool isRunning() const { return m_running; }
 
 signals:
@@ -44,6 +51,11 @@ signals:
     void toolCallStarted(const QString &name, const QString &argsJson);
     /** 工具执行完毕 */
     void toolCallFinished(const QString &name, bool ok, const QString &result);
+    /**
+     * 某个工具需要用户许可才能执行。
+     * 界面必须调用 respondPermission() 回复，否则会阻塞到超时。
+     */
+    void permissionRequired(const QString &toolName, const QString &detail);
     /** 整个循环结束（含最终回答） */
     void finished(const QList<Message> &finalHistory);
     void errorOccurred(const QString &message);
@@ -56,6 +68,8 @@ private slots:
 
 private:
     void request();
+    /** 阻塞等待用户许可；超时按拒绝处理 */
+    bool askPermission(const QString &toolName, const QString &detail);
 
     IModelProvider *m_provider = nullptr;
     QList<Message> m_history;
@@ -64,4 +78,8 @@ private:
     int m_maxRounds = 8;
     int m_round = 0;
     bool m_running = false;
+
+    // 权限等待：用嵌套事件循环阻塞工具执行，直到界面给出答复
+    QEventLoop *m_permissionLoop = nullptr;
+    bool m_permissionGranted = false;
 };

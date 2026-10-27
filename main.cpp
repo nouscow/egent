@@ -58,6 +58,12 @@ int main(int argc, char *argv[])
         st.setValue(QStringLiteral("agent/workspace"), ws);
         st.setValue(QStringLiteral("agent/enabled"), !ws.isEmpty());
     }
+    // 调试用：--cmd-policy <off|always|session|never>
+    const int cpIdx = args.indexOf(QStringLiteral("--cmd-policy"));
+    if (cpIdx > 0 && cpIdx + 1 < args.size()) {
+        QSettings st(QStringLiteral("egent"), QStringLiteral("egent"));
+        st.setValue(QStringLiteral("agent/command_policy"), args.at(cpIdx + 1));
+    }
 
     MainWindow w;
     w.show();

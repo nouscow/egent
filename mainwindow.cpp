@@ -36,6 +36,8 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMessageBox>
 #include <QTextStream>
 #include <QVBoxLayout>
@@ -71,6 +73,8 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::onToolStarted);
     connect(m_agentLoop, &AgentLoop::toolCallFinished,
             this, &MainWindow::onToolFinished);
+    connect(m_agentLoop, &AgentLoop::permissionRequired,
+            this, &MainWindow::onPermissionRequired);
 
     m_streamTimer = new QTimer(this);
     m_streamTimer->setInterval(50);
@@ -434,6 +438,39 @@ void MainWindow::onToolStarted(const QString &name, const QString &argsJson)
         ++m_streamingMsgIndex;
 }
 
+void MainWindow::onPermissionRequired(const QString &toolName, const QString &detail)
+{
+    // 策略放行：从不询问；或本会话已经批准过一次
+    if (m_commandPolicy == QLatin1String("never")
+        || (m_commandPolicy == QLatin1String("session") && m_commandApprovedOnce)) {
+        m_agentLoop->respondPermission(true);
+        return;
+    }
+
+    // argsJson 形如 {"command":"git status"}，直接把命令行抽出来给人看
+    QString shown = detail;
+    const QJsonDocument doc = QJsonDocument::fromJson(detail.toUtf8());
+    if (doc.isObject())
+        shown = doc.object().value(QStringLiteral("command")).toString(detail);
+
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("确认执行命令"));
+    box.setIcon(QMessageBox::Warning);
+    box.setText(QStringLiteral("模型请求在工作区执行以下命令："));
+    box.setInformativeText(shown);
+    box.setDetailedText(QStringLiteral("工具：%1\n参数：%2").arg(toolName, detail));
+    box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+    box.setDefaultButton(QMessageBox::No);
+    box.button(QMessageBox::Yes)->setText(QStringLiteral("允许执行"));
+    box.button(QMessageBox::No)->setText(QStringLiteral("拒绝"));
+
+    const bool granted = (box.exec() == QMessageBox::Yes);
+    if (granted && m_commandPolicy == QLatin1String("session"))
+        m_commandApprovedOnce = true;
+
+    m_agentLoop->respondPermission(granted);
+}
+
 void MainWindow::onToolFinished(const QString &name, bool ok, const QString &result)
 {
     // 卡片的索引不再固定是「最后一条」——助手气泡排在它后面
@@ -535,8 +572,13 @@ void MainWindow::applyParamsFromSettings()
     const bool agentOn = s.value(QStringLiteral("agent/enabled"), false).toBool();
     const QString workspace = s.value(QStringLiteral("agent/workspace")).toString();
     m_provider->setOption(QStringLiteral("tools_enabled"), agentOn);
+    m_commandPolicy =
+        s.value(QStringLiteral("agent/command_policy"), QStringLiteral("off")).toString();
+    const bool allowCommand =
+        agentOn && !workspace.isEmpty() && m_commandPolicy != QLatin1String("off");
+
     if (agentOn && !workspace.isEmpty()) {
-        ToolRegistry::instance().registerDefaults();
+        ToolRegistry::instance().registerDefaults(allowCommand);
         PathGuard::instance().setWorkspace(workspace);
     } else {
         // 关掉时清空工作区，等于彻底关闭文件访问

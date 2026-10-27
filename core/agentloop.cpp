@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
 
 AgentLoop::AgentLoop(IModelProvider *provider, QObject *parent)
     : QObject(parent)
@@ -77,6 +78,35 @@ void AgentLoop::onProviderError(const QString &message)
     emit finished(m_history);
 }
 
+bool AgentLoop::askPermission(const QString &toolName, const QString &detail)
+{
+    m_permissionGranted = false;
+
+    QEventLoop loop;
+    m_permissionLoop = &loop;
+
+    // 必须延迟到事件循环真正跑起来之后再通知界面。
+    // 若在这里同步 emit，界面会立刻调用 respondPermission()，
+    // 而那时 loop 还没 exec，quit() 会被吞掉 —— 结果是每次都要干等 60 秒超时。
+    QTimer::singleShot(0, this, [this, toolName, detail]() {
+        emit permissionRequired(toolName, detail);
+    });
+
+    // 界面若忘了回复，不能把整个对话卡死
+    QTimer::singleShot(60000, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    m_permissionLoop = nullptr;
+    return m_permissionGranted;
+}
+
+void AgentLoop::respondPermission(bool granted)
+{
+    m_permissionGranted = granted;
+    if (m_permissionLoop)
+        m_permissionLoop->quit();
+}
+
 void AgentLoop::onToolCalls(const QJsonArray &calls)
 {
     if (!m_running)
@@ -97,10 +127,26 @@ void AgentLoop::onToolCalls(const QJsonArray &calls)
         const QString name = fn.value(QStringLiteral("name")).toString();
         const QString argsJson = fn.value(QStringLiteral("arguments")).toString();
 
-        emit toolCallStarted(name, argsJson);
-
         ToolResult result;
         ITool *tool = ToolRegistry::instance().find(name);
+
+        // 需要许可的工具：先问人，再做。用户不答就按拒绝处理。
+        if (tool && tool->requiresConfirmation() && !askPermission(name, argsJson)) {
+            result = ToolResult::failure(
+                QStringLiteral("用户拒绝执行这条命令，请换一种做法或询问用户。"));
+            emit toolCallStarted(name, argsJson);
+            emit toolCallFinished(name, false, result.content);
+            Message denied;
+            denied.role = Role::Tool;
+            denied.content = result.content;
+            denied.toolCallId = callId;
+            denied.name = name;
+            m_history.append(denied);
+            continue;
+        }
+
+        emit toolCallStarted(name, argsJson);
+
         if (!tool) {
             result = ToolResult::failure(
                 QStringLiteral("没有名为 %1 的工具").arg(name));

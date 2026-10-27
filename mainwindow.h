@@ -46,6 +46,7 @@ private slots:
     void onCopyMessage(const QString &text);
     void onToolStarted(const QString &name, const QString &argsJson);
     void onToolFinished(const QString &name, bool ok, const QString &result);
+    void onPermissionRequired(const QString &toolName, const QString &detail);
     void onRegenerateMessage(int index);
     void onNewSession();
     void onSessionActivated(QListWidgetItem *item);
@@ -78,6 +79,10 @@ private:
     int m_currentSessionId = -1;
     ChatView *m_chatView = nullptr;
     AgentLoop *m_agentLoop = nullptr;
+
+    // 命令执行策略与「本会话已批准」标记
+    QString m_commandPolicy = QStringLiteral("off");
+    bool m_commandApprovedOnce = false;
     QPlainTextEdit *m_input = nullptr;
     QComboBox *m_themeBox = nullptr;
     QComboBox *m_modelBox = nullptr;

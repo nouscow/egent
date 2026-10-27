@@ -1,6 +1,7 @@
 #include "settingsdialog.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QHBoxLayout>
@@ -85,6 +86,16 @@ void SettingsDialog::buildUi()
     wsLayout->addWidget(browseBtn);
     form->addRow(QStringLiteral("工作区目录"), wsRow);
 
+    m_commandPolicy = new QComboBox(this);
+    m_commandPolicy->addItem(QStringLiteral("关闭（不提供命令执行）"), QStringLiteral("off"));
+    m_commandPolicy->addItem(QStringLiteral("每次执行都问我"), QStringLiteral("always"));
+    m_commandPolicy->addItem(QStringLiteral("本次会话问一次"), QStringLiteral("session"));
+    m_commandPolicy->addItem(QStringLiteral("不再询问（危险）"), QStringLiteral("never"));
+    m_commandPolicy->setToolTip(
+        QStringLiteral("格式化磁盘、递归删除等命令属于硬性禁止，"
+                       "即使选「不再询问」也不会执行。"));
+    form->addRow(QStringLiteral("命令执行"), m_commandPolicy);
+
     root->addLayout(form);
 
     auto *hint = new QLabel(
@@ -115,6 +126,10 @@ void SettingsDialog::loadFromSettings()
         s.value(QStringLiteral("params/timeout_sec"), kDefaultTimeoutSec).toInt());
     m_agentEnabled->setChecked(s.value(QStringLiteral("agent/enabled"), false).toBool());
     m_workspace->setText(s.value(QStringLiteral("agent/workspace")).toString());
+    const QString policy = s.value(QStringLiteral("agent/command_policy"),
+                                   QStringLiteral("off")).toString();
+    const int pi = m_commandPolicy->findData(policy);
+    m_commandPolicy->setCurrentIndex(pi >= 0 ? pi : 0);
 }
 
 void SettingsDialog::saveToSettings()
@@ -125,6 +140,7 @@ void SettingsDialog::saveToSettings()
     s.setValue(QStringLiteral("params/timeout_sec"), m_timeoutSec->value());
     s.setValue(QStringLiteral("agent/enabled"), m_agentEnabled->isChecked());
     s.setValue(QStringLiteral("agent/workspace"), m_workspace->text().trimmed());
+    s.setValue(QStringLiteral("agent/command_policy"), m_commandPolicy->currentData().toString());
 }
 
 double SettingsDialog::temperature() const
@@ -150,4 +166,9 @@ bool SettingsDialog::agentEnabled() const
 QString SettingsDialog::workspace() const
 {
     return m_workspace->text().trimmed();
+}
+
+QString SettingsDialog::commandPolicy() const
+{
+    return m_commandPolicy->currentData().toString();
 }

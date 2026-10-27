@@ -3,6 +3,7 @@
 #include <QDialog>
 
 class QCheckBox;
+class QComboBox;
 class QDoubleSpinBox;
 class QLineEdit;
 class QPushButton;
@@ -34,6 +35,8 @@ public:
     bool agentEnabled() const;
     /** 工作区根目录（Agent 只能访问其下） */
     QString workspace() const;
+    /** 命令执行策略：off / always / session / never */
+    QString commandPolicy() const;
 
 private:
     void buildUi();
@@ -43,4 +46,5 @@ private:
     QSpinBox *m_timeoutSec = nullptr;
     QCheckBox *m_agentEnabled = nullptr;
     QLineEdit *m_workspace = nullptr;
+    QComboBox *m_commandPolicy = nullptr;
 };

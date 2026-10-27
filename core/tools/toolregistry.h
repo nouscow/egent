@@ -22,8 +22,11 @@ class ToolRegistry
 public:
     static ToolRegistry &instance();
 
-    /** 注册 L2 只读工具（幂等，重复调用不会重复注册） */
-    void registerDefaults();
+    /**
+     * 注册内置工具（幂等到单个工具，可重复调用）。
+     * includeCommandTool 为 true 时才注册 run_command —— 命令执行默认不开启。
+     */
+    void registerDefaults(bool includeCommandTool = false);
 
     void add(std::unique_ptr<ITool> tool);
 

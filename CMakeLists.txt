@@ -32,6 +32,8 @@ qt_add_library(egent_core STATIC
     core/tools/readonlytools.cpp
     core/tools/toolregistry.h
     core/tools/toolregistry.cpp
+    core/tools/runcommandtool.h
+    core/tools/runcommandtool.cpp
 )
 target_include_directories(egent_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(egent_core PUBLIC Qt::Core Qt::Network Qt::Sql)
@@ -133,6 +135,10 @@ target_link_libraries(session_test PRIVATE egent_core)
 # Agent 只读工具（含路径越界拦截）
 qt_add_executable(tool_test tests/tool_test.cpp)
 target_link_libraries(tool_test PRIVATE egent_core)
+
+# 命令执行工具（黑名单 / 工作区约束 / 退出码）
+qt_add_executable(cmd_test tests/cmd_test.cpp)
+target_link_libraries(cmd_test PRIVATE egent_core)
 
 # Agent 端到端：真实模型 + 工具循环（需要 DASHSCOPE_API_KEY）
 qt_add_executable(agent_test tests/agent_test.cpp)
