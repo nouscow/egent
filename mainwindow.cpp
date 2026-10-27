@@ -7,6 +7,7 @@
 
 #include <QTimer>
 #include <utility>
+#include <functional>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -58,6 +59,8 @@ MainWindow::MainWindow(QWidget *parent)
     resize(980, 760);
 
     buildUi();
+
+    setupShortcuts();
 
     connect(&ThemeManager::instance(), &ThemeManager::themeChanged,
             this, &MainWindow::onThemeChanged);
@@ -270,7 +273,8 @@ void MainWindow::buildUi()
     inputLayout->setSpacing(10);
 
     m_input = new QPlainTextEdit(inputWrap);
-    m_input->setPlaceholderText(QStringLiteral("说点什么……（Ctrl+Enter 发送）"));
+    m_input->setPlaceholderText(
+        QStringLiteral("说点什么……（Ctrl+Enter 发送 · Esc 停止 · Ctrl+N 新会话 · F1 帮助）"));
     m_input->setFixedHeight(78);
     inputLayout->addWidget(m_input, 1);
 
@@ -286,10 +290,81 @@ void MainWindow::buildUi()
 
     outer->addWidget(rightWrap, 1);
     setCentralWidget(central);
+}
 
-    // Ctrl+Enter 发送
-    auto *sendShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
-    connect(sendShortcut, &QShortcut::activated, this, &MainWindow::onSendClicked);
+void MainWindow::setupShortcuts()
+{
+    // 统一在窗口级注册（WindowShortcut）：模态对话框打开时主窗口不活跃，
+    // 这些快捷键自动失效，不会和对话框里的 Esc / 回车打架。
+    auto bind = [this](const QKeySequence &ks, const std::function<void()> &fn) {
+        auto *sc = new QShortcut(ks, this);
+        sc->setContext(Qt::WindowShortcut);
+        connect(sc, &QShortcut::activated, this, fn);
+    };
+
+    // 发送：主回车与小键盘回车都触发（聊天输入里回车换行、用 Ctrl 发送）
+    bind(QKeySequence(Qt::CTRL | Qt::Key_Return), [this] { onSendClicked(); });
+    bind(QKeySequence(Qt::CTRL | Qt::Key_Enter), [this] { onSendClicked(); });
+
+    // Esc：生成中 = 停止；否则清空输入框（输入为空时不做事）
+    bind(QKeySequence(Qt::Key_Escape), [this] {
+        if (m_streamingMsgIndex >= 0) {
+            if (m_agentLoop)
+                m_agentLoop->cancel();
+        } else if (m_input && !m_input->toPlainText().isEmpty()) {
+            m_input->clear();
+        }
+    });
+
+    // 新会话
+    bind(QKeySequence(Qt::CTRL | Qt::Key_N), [this] { onNewSession(); });
+
+    // 快速切模型：聚焦模型下拉并展开，↑↓ 选择、回车确认
+    bind(QKeySequence(Qt::CTRL | Qt::Key_K), [this] {
+        if (m_modelBox) {
+            m_modelBox->setFocus();
+            m_modelBox->showPopup();
+        }
+    });
+
+    // 重新生成上一条回答（生成中忽略，由 onRegenerateMessage 内部再判一次）
+    bind(QKeySequence(Qt::CTRL | Qt::Key_R), [this] {
+        int idx = -1;
+        for (int i = m_messages.size() - 1; i >= 0; --i) {
+            if (m_messages.at(i).first == QLatin1String("assistant")) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx >= 0)
+            onRegenerateMessage(idx);
+    });
+
+    // 导出当前会话为 Markdown
+    bind(QKeySequence(Qt::CTRL | Qt::Key_E), [this] { onExportSession(m_currentSessionId); });
+
+    // 打开设置（与多数桌面应用一致：Ctrl+,）
+    bind(QKeySequence(Qt::CTRL | Qt::Key_Comma), [this] { openSettings(); });
+
+    // 快捷键帮助：F1 或 Ctrl+/ 都可以
+    bind(QKeySequence(Qt::Key_F1), [this] { showShortcutsHelp(); });
+    bind(QKeySequence(Qt::CTRL | Qt::Key_Slash), [this] { showShortcutsHelp(); });
+}
+
+void MainWindow::showShortcutsHelp()
+{
+    const QString text = QStringLiteral(
+        "<table cellspacing='6'>"
+        "<tr><td><b>Ctrl + Enter</b></td><td>发送消息</td></tr>"
+        "<tr><td><b>Esc</b></td><td>生成中停止；否则清空输入框</td></tr>"
+        "<tr><td><b>Ctrl + N</b></td><td>新建会话</td></tr>"
+        "<tr><td><b>Ctrl + K</b></td><td>快速切换模型</td></tr>"
+        "<tr><td><b>Ctrl + R</b></td><td>重新生成上一条回答</td></tr>"
+        "<tr><td><b>Ctrl + E</b></td><td>导出当前会话为 Markdown</td></tr>"
+        "<tr><td><b>Ctrl + ,</b></td><td>打开设置</td></tr>"
+        "<tr><td><b>F1 / Ctrl + /</b></td><td>显示本帮助</td></tr>"
+        "</table>");
+    QMessageBox::information(this, QStringLiteral("快捷键"), text);
 }
 
 void MainWindow::onThemeSelected(int index)

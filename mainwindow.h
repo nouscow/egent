@@ -69,6 +69,10 @@ private:
     void refreshModelList();
     /** 真正发起请求（发送与重新生成共用） */
     void startRequest(const QList<Message> &history);
+    /** M4 快捷键系统：集中注册所有全局快捷键（新会话 / 切模型 / 停止 / 帮助…） */
+    void setupShortcuts();
+    /** 展示快捷键帮助 */
+    void showShortcutsHelp();
 
     /** 重建左侧会话列表 */
     void reloadSessionList();
