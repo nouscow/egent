@@ -37,6 +37,8 @@ public:
     QString workspace() const;
     /** 命令执行策略：off / always / session / never */
     QString commandPolicy() const;
+    /** 新填的 API Key；空表示不修改 */
+    QString apiKey() const;
 
 private:
     void buildUi();
@@ -47,4 +49,5 @@ private:
     QCheckBox *m_agentEnabled = nullptr;
     QLineEdit *m_workspace = nullptr;
     QComboBox *m_commandPolicy = nullptr;
+    QLineEdit *m_apiKey = nullptr;
 };

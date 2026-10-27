@@ -212,6 +212,59 @@ QDoubleSpinBox::down-button {
     subcontrol-origin: border;
 }
 
+/* ---------- 复选框 ---------- */
+QCheckBox {
+    color: {{text.primary}};
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid {{input.border}};
+    border-radius: 4px;
+    background: {{input.bg}};
+}
+
+QCheckBox::indicator:hover {
+    border-color: {{border.focus}};
+}
+
+QCheckBox::indicator:checked {
+    background: {{accent}};
+    border-color: {{accent}};
+}
+
+QCheckBox::indicator:disabled {
+    background: {{bg.hover}};
+    border-color: {{border.default}};
+}
+
+/* ---------- 分组框 ---------- */
+QGroupBox {
+    border: 1px solid {{border.default}};
+    border-radius: 10px;
+    margin-top: 14px;
+    padding: 14px 12px 12px 12px;
+    color: {{text.secondary}};
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    padding: 0 5px;
+}
+
+/* ---------- 消息框 ---------- */
+QMessageBox {
+    background: {{bg.surface}};
+}
+
+QMessageBox QLabel {
+    color: {{text.primary}};
+}
+
 /* ---------- 下拉框 ---------- */
 QComboBox {
     background: {{bg.elevated}};

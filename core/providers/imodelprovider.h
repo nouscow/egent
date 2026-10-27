@@ -52,6 +52,9 @@ signals:
      * 发出本信号后**不会**再发 finished()。
      */
     void toolCallsReady(const QJsonArray &toolCalls);
+
+    /** 命中限流，正在按退避策略重试（attempt 从 1 开始） */
+    void retrying(int attempt, int delayMs);
     void finished();
     void errorOccurred(const QString &message);
 };

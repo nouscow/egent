@@ -90,25 +90,74 @@ void BailianProvider::send(const QList<Message> &history, const QString &model)
     if (m_enableTools && !ToolRegistry::instance().isEmpty())
         body.insert(QStringLiteral("tools"), ToolRegistry::instance().toolsForModel());
 
-    QNetworkRequest req(endpoint());
-    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-
     const QString key = apiKey();
     if (key.isEmpty()) {
         emit errorOccurred(QStringLiteral(
-            "未找到 DASHSCOPE_API_KEY：请设置环境变量后再试。"));
+            "未找到 API Key：请在设置里填写，或设置环境变量 DASHSCOPE_API_KEY。"));
         return;
     }
-    req.setRawHeader("Authorization", ("Bearer " + key).toUtf8());
 
-    QJsonDocument doc(body);
-    m_reply = m_nam->post(req, doc.toJson());
+    const QJsonDocument doc(body);
+    m_lastBody = doc.toJson();
+    m_retryCount = 0;
+    postRaw(m_lastBody);
+}
+
+void BailianProvider::postRaw(const QByteArray &body)
+{
+    if (m_reply) {
+        m_reply->disconnect(this);
+        m_reply->deleteLater();
+        m_reply = nullptr;
+    }
+
+    m_parser.reset();
+    m_errored = false;
+    m_errorBody.clear();
+    m_pendingCalls.clear();
+
+    QNetworkRequest req(endpoint());
+    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    req.setRawHeader("Authorization", ("Bearer " + apiKey()).toUtf8());
+
+    m_reply = m_nam->post(req, body);
     connect(m_reply, &QNetworkReply::readyRead, this, &BailianProvider::onReadyRead);
     connect(m_reply, &QNetworkReply::finished, this, &BailianProvider::onFinished);
     connect(m_reply, &QNetworkReply::errorOccurred, this, &BailianProvider::onError);
 
     if (m_timeoutMs > 0)
         m_timeoutTimer->start(m_timeoutMs);
+}
+
+bool BailianProvider::handleRateLimit()
+{
+    if (!m_reply || m_cancelled)
+        return false;
+
+    const int status =
+        m_reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (status != 429)
+        return false;
+    if (m_retryCount >= kMaxRetries)
+        return false;
+
+    // 1s → 2s → 4s，指数退避
+    const int delay = 1000 * (1 << m_retryCount);
+    ++m_retryCount;
+
+    // 清掉当前 reply，等退避结束后原样重发
+    m_reply->disconnect(this);
+    m_reply->deleteLater();
+    m_reply = nullptr;
+    m_timeoutTimer->stop();
+    m_errored = false;
+
+    emit retrying(m_retryCount, delay);
+    QTimer::singleShot(delay, this, [this]() {
+        if (!m_cancelled && !m_lastBody.isEmpty())
+            postRaw(m_lastBody);
+    });
+    return true;
 }
 
 void BailianProvider::onReadyRead()
@@ -253,6 +302,8 @@ void BailianProvider::onError(QNetworkReply::NetworkError /*code*/)
 {
     if (m_cancelled)
         return; // 用户主动中止，不算错误
+    if (handleRateLimit())
+        return; // 已安排退避重试，不当作错误上报
     if (m_errored)
         return;
     m_errored = true;
@@ -280,6 +331,9 @@ void BailianProvider::onFinished()
         m_reply = nullptr;
         return;
     }
+
+    if (handleRateLimit())
+        return; // 已在重试流程里，reply 已被清空
 
     // 模型要求调用工具：本轮到此为止，交给上层执行后再发起下一轮
     if (!m_pendingCalls.isEmpty()) {

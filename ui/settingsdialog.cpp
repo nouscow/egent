@@ -41,6 +41,29 @@ void SettingsDialog::buildUi()
     form->setHorizontalSpacing(14);
     form->setVerticalSpacing(12);
 
+    // ---- API Key（企划书要求：MVP 至少要能在此填写）----
+    auto *keyRow = new QWidget(this);
+    auto *keyLayout = new QHBoxLayout(keyRow);
+    keyLayout->setContentsMargins(0, 0, 0, 0);
+    keyLayout->setSpacing(8);
+
+    m_apiKey = new QLineEdit(keyRow);
+    m_apiKey->setEchoMode(QLineEdit::Password); // 不明文回显
+    keyLayout->addWidget(m_apiKey, 1);
+
+    auto *clearKeyBtn = new QPushButton(QStringLiteral("清除"), keyRow);
+    clearKeyBtn->setFixedWidth(60);
+    clearKeyBtn->setToolTip(QStringLiteral("删除本地保存的 Key"));
+    connect(clearKeyBtn, &QPushButton::clicked, this, [this]() {
+        QSettings st(QStringLiteral("egent"), QStringLiteral("egent"));
+        st.remove(QStringLiteral("dashscope_api_key"));
+        m_apiKey->clear();
+        m_apiKey->setPlaceholderText(QStringLiteral("已清除，请重新填写"));
+    });
+    keyLayout->addWidget(clearKeyBtn);
+
+    form->addRow(QStringLiteral("API Key"), keyRow);
+
     m_temperature = new QDoubleSpinBox(this);
     m_temperature->setRange(0.0, 2.0);
     m_temperature->setSingleStep(0.1);
@@ -124,6 +147,17 @@ void SettingsDialog::loadFromSettings()
         s.value(QStringLiteral("params/max_tokens"), kDefaultMaxTokens).toInt());
     m_timeoutSec->setValue(
         s.value(QStringLiteral("params/timeout_sec"), kDefaultTimeoutSec).toInt());
+    // Key 永不回显：环境变量优先，其次本地保存，两者都没有才提示填写
+    const bool fromEnv = !qgetenv("DASHSCOPE_API_KEY").isEmpty();
+    const bool hasSaved = !s.value(QStringLiteral("dashscope_api_key")).toString().isEmpty();
+    m_apiKey->clear();
+    if (fromEnv)
+        m_apiKey->setPlaceholderText(QStringLiteral("使用环境变量 DASHSCOPE_API_KEY（优先级最高）"));
+    else if (hasSaved)
+        m_apiKey->setPlaceholderText(QStringLiteral("已保存，留空则保持不变"));
+    else
+        m_apiKey->setPlaceholderText(QStringLiteral("未设置，请填写 sk-..."));
+
     m_agentEnabled->setChecked(s.value(QStringLiteral("agent/enabled"), false).toBool());
     m_workspace->setText(s.value(QStringLiteral("agent/workspace")).toString());
     const QString policy = s.value(QStringLiteral("agent/command_policy"),
@@ -135,6 +169,10 @@ void SettingsDialog::loadFromSettings()
 void SettingsDialog::saveToSettings()
 {
     QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    const QString key = m_apiKey->text().trimmed();
+    if (!key.isEmpty())
+        s.setValue(QStringLiteral("dashscope_api_key"), key);
+
     s.setValue(QStringLiteral("params/temperature"), m_temperature->value());
     s.setValue(QStringLiteral("params/max_tokens"), m_maxTokens->value());
     s.setValue(QStringLiteral("params/timeout_sec"), m_timeoutSec->value());
@@ -171,4 +209,9 @@ QString SettingsDialog::workspace() const
 QString SettingsDialog::commandPolicy() const
 {
     return m_commandPolicy->currentData().toString();
+}
+
+QString SettingsDialog::apiKey() const
+{
+    return m_apiKey->text().trimmed();
 }

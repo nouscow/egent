@@ -76,6 +76,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_agentLoop, &AgentLoop::permissionRequired,
             this, &MainWindow::onPermissionRequired);
 
+    // 限流重试在状态栏提示，避免用户以为卡住
+    connect(m_provider, &IModelProvider::retrying, this,
+            [this](int attempt, int delayMs) {
+                statusBar()->showMessage(
+                    QStringLiteral("请求被限流，%1 秒后自动重试（第 %2/%3 次）")
+                        .arg(delayMs / 1000)
+                        .arg(attempt)
+                        .arg(3),
+                    delayMs);
+            });
+
     m_streamTimer = new QTimer(this);
     m_streamTimer->setInterval(50);
     connect(m_streamTimer, &QTimer::timeout, this, &MainWindow::flushStream);

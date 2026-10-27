@@ -57,6 +57,15 @@ private:
     double m_temperature = 0.7;
     int m_maxTokens = 4096;
 
+    // ---- 限流退避重试 ----
+    static constexpr int kMaxRetries = 3;
+    QByteArray m_lastBody;   // 重试时原样重发
+    int m_retryCount = 0;
+
+    void postRaw(const QByteArray &body);
+    /** 命中 429 时安排重试；返回 true 表示已在重试流程中，不要报错 */
+    bool handleRateLimit();
+
     // ---- Agent 工具调用 ----
     bool m_enableTools = false;
     struct PendingToolCall

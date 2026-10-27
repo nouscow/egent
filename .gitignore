@@ -82,3 +82,10 @@ CMakeLists.txt.user*
 .uic/
 /build*/
 /.qtcreator/
+
+# ---- 本地密钥与私有配置（企划书第九章要求）----
+*.ini
+*.key
+*.pem
+*.pfx
+.env
