@@ -1,0 +1,54 @@
+#include "qsstemplate.h"
+
+#include <QRegularExpression>
+#include <QSet>
+
+namespace QssTemplate {
+
+RenderResult render(const QString &tpl, const Lookup &lookup)
+{
+    // QSS 里不会自然出现 {{ }}，因此这个占位符语法是安全的。
+    static const QRegularExpression re(QStringLiteral("\\{\\{\\s*([\\w.\\-]+)\\s*\\}\\}"));
+
+    RenderResult result;
+    QSet<QString> unknown;
+
+    QString out;
+    out.reserve(tpl.size());
+
+    int last = 0;
+    auto it = re.globalMatch(tpl);
+    while (it.hasNext()) {
+        const QRegularExpressionMatch m = it.next();
+        out += tpl.mid(last, m.capturedStart() - last);
+
+        const QString name = m.captured(1);
+        const QString value = lookup ? lookup(name) : QString();
+
+        if (value.isEmpty()) {
+            // 令牌缺失：原样保留占位符，让残留检测能抓到，同时不至于整段样式崩塌
+            out += m.captured(0);
+            unknown.insert(name);
+        } else {
+            out += value;
+        }
+        last = m.capturedEnd();
+    }
+    out += tpl.mid(last);
+
+    result.qss = out;
+
+    // 兜底残留检测：即使语法不匹配正则，也要能发现 {{ 没被消灭
+    static const QRegularExpression residue(QStringLiteral("\\{\\{"));
+    if (residue.match(out).hasMatch()) {
+        auto it2 = residue.globalMatch(out);
+        while (it2.hasNext())
+            unknown.insert(QStringLiteral("(未识别占位符)"));
+    }
+
+    result.unknownTokens = QStringList(unknown.constBegin(), unknown.constEnd());
+    result.unknownTokens.sort();
+    return result;
+}
+
+} // namespace QssTemplate

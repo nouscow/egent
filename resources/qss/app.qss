@@ -1,0 +1,319 @@
+/* ============================================================
+   百炼客户端 · 全局样式模板
+   ------------------------------------------------------------
+   本文件是唯一的样式来源，所有颜色必须写成「双花括号 + 令牌名」的占位符，
+   由 ThemeManager 在运行时用主题 JSON 渲染后注入。
+   （注意：不要在注释里写占位符示例，会被渲染期残留检测抓到）
+
+   三条硬规则（详见 使用说明 / CONTRIBUTING）：
+     1. 不在这里写死任何色值
+     2. 不在 C++ 里调用 setStyleSheet
+     3. QWidget 子类要吃 background 必须 setAttribute(WA_StyledBackground)
+   ============================================================ */
+
+/* ---------- 基础 ---------- */
+QWidget {
+    color: {{text.primary}};
+    font-size: 14px;
+}
+
+QMainWindow,
+QDialog {
+    background: {{bg.window}};
+}
+
+QMenuBar {
+    background: {{toolbar.bg}};
+    color: {{text.primary}};
+    border-bottom: 1px solid {{border.default}};
+}
+
+QMenuBar::item:selected {
+    background: {{bg.hover}};
+}
+
+QMenu {
+    background: {{bg.surface}};
+    border: 1px solid {{border.default}};
+}
+
+QMenu::item:selected {
+    background: {{accent}};
+    color: {{text.onAccent}};
+}
+
+QStatusBar {
+    background: {{toolbar.bg}};
+    color: {{text.secondary}};
+    border-top: 1px solid {{border.default}};
+}
+
+/* ---------- 左侧会话栏 ---------- */
+QWidget#sidebar {
+    background: {{bg.surface}};
+    border-right: 1px solid {{border.default}};
+}
+
+QPushButton#newSessionButton {
+    background: {{accent}};
+    color: {{text.onAccent}};
+    border: none;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-weight: 600;
+}
+
+QPushButton#newSessionButton:hover {
+    background: {{accent.hover}};
+}
+
+QListWidget#sessionList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+QListWidget#sessionList::item {
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: {{text.primary}};
+}
+
+QListWidget#sessionList::item:hover {
+    background: {{bg.hover}};
+}
+
+/* 选中态用中性底 + 主色文字：如果也用 accent 实心，
+   会和上方「新会话」按钮撞成两个蓝块，分不清哪个可点 */
+QListWidget#sessionList::item:selected {
+    background: {{bg.hover}};
+    color: {{accent}};
+}
+
+/* ---------- 顶部工具条 ---------- */
+QWidget#toolbar {
+    background: {{toolbar.bg}};
+    border-bottom: 1px solid {{border.default}};
+}
+
+QLabel#toolbarTitle {
+    font-size: 15px;
+    font-weight: 600;
+    color: {{text.primary}};
+}
+
+QLabel#hintLabel {
+    color: {{text.secondary}};
+}
+
+/* ---------- 输入类 ---------- */
+QLineEdit,
+QPlainTextEdit,
+QTextEdit {
+    background: {{input.bg}};
+    color: {{text.primary}};
+    border: 1px solid {{input.border}};
+    border-radius: 8px;
+    padding: 8px 10px;
+    selection-background-color: {{selection.bg}};
+    selection-color: {{text.onAccent}};
+}
+
+QLineEdit:focus,
+QPlainTextEdit:focus,
+QTextEdit:focus {
+    border-color: {{border.focus}};
+}
+
+QLineEdit:disabled,
+QPlainTextEdit:disabled {
+    color: {{text.placeholder}};
+}
+
+/* ---------- 按钮 ---------- */
+QPushButton {
+    background: {{bg.elevated}};
+    color: {{text.primary}};
+    border: 1px solid {{border.default}};
+    border-radius: 8px;
+    padding: 7px 16px;
+}
+
+QPushButton:hover {
+    background: {{bg.hover}};
+    border-color: {{accent}};
+}
+
+QPushButton:pressed {
+    background: {{bg.surface}};
+}
+
+QPushButton:disabled {
+    color: {{text.placeholder}};
+    border-color: {{border.default}};
+}
+
+QPushButton#sendButton {
+    background: {{accent}};
+    color: {{text.onAccent}};
+    border: none;
+    font-weight: 600;
+}
+
+QPushButton#sendButton:hover {
+    background: {{accent.hover}};
+}
+
+QPushButton#sendButton:disabled {
+    background: {{bg.hover}};
+    color: {{text.placeholder}};
+}
+
+QPushButton#dangerButton {
+    background: {{danger}};
+    color: {{text.onAccent}};
+    border: none;
+}
+
+QPushButton#dangerButton:hover {
+    background: {{danger.hover}};
+}
+
+QPushButton#iconButton {
+    padding: 0;
+    font-size: 16px;
+}
+
+/* ---------- 数值输入 ---------- */
+QSpinBox,
+QDoubleSpinBox {
+    background: {{input.bg}};
+    color: {{text.primary}};
+    border: 1px solid {{input.border}};
+    border-radius: 8px;
+    padding: 6px 8px;
+    min-width: 90px;
+}
+
+QSpinBox:focus,
+QDoubleSpinBox:focus {
+    border-color: {{border.focus}};
+}
+
+/* 只留出宽度，其余交给 Qt 自己画箭头。
+   注意：一旦给 background / border 赋值，默认箭头会被一并抹掉，
+   表现成「数值框没有上下按钮」，只能手输——这是个很容易踩的坑。 */
+QSpinBox::up-button,
+QDoubleSpinBox::up-button,
+QSpinBox::down-button,
+QDoubleSpinBox::down-button {
+    width: 16px;
+    subcontrol-origin: border;
+}
+
+/* ---------- 下拉框 ---------- */
+QComboBox {
+    background: {{bg.elevated}};
+    color: {{text.primary}};
+    border: 1px solid {{border.default}};
+    border-radius: 8px;
+    padding: 6px 12px;
+    min-width: 96px;
+}
+
+QComboBox:hover {
+    border-color: {{accent}};
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background: {{bg.surface}};
+    color: {{text.primary}};
+    border: 1px solid {{border.default}};
+    selection-background-color: {{accent}};
+    selection-color: {{text.onAccent}};
+    outline: none;
+}
+
+/* ---------- 对话区 ---------- */
+QScrollArea#chatView {
+    background: {{bg.surface}};
+    border: 1px solid {{border.default}};
+    border-radius: 12px;
+}
+
+QWidget#chatContainer {
+    background: {{bg.surface}};
+}
+
+/* 消息气泡：由动态属性 role 命中（见 MessageBubble） */
+QWidget[role="userBubble"] {
+    background: {{chat.userBubble.bg}};
+    color: {{chat.userBubble.text}};
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+
+QWidget[role="assistantBubble"] {
+    background: {{chat.assistantBubble.bg}};
+    color: {{chat.assistantBubble.text}};
+    border: 1px solid {{border.default}};
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+
+/* 头像由 AvatarWidget 自绘：
+   圆形裁剪 QPixmap 用 QSS 的 border-radius 做不到，所以不在这里定义样式，
+   颜色统一取自 avatar.* 令牌（见 ui/avatarwidget.cpp）。 */
+
+/* ---------- 滚动条 ---------- */
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical {
+    background: {{scrollbar.handle}};
+    border-radius: 5px;
+    min-height: 28px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: {{scrollbar.hover}};
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+    margin: 2px;
+}
+
+QScrollBar::handle:horizontal {
+    background: {{scrollbar.handle}};
+    border-radius: 5px;
+    min-width: 28px;
+}
+
+QScrollBar::add-line,
+QScrollBar::sub-line {
+    height: 0;
+    width: 0;
+}
+
+QScrollBar::add-page,
+QScrollBar::sub-page {
+    background: transparent;
+}
+
+/* ---------- 提示气泡 ---------- */
+QToolTip {
+    background: {{bg.elevated}};
+    color: {{text.primary}};
+    border: 1px solid {{border.default}};
+    padding: 6px 8px;
+}
