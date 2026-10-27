@@ -123,3 +123,17 @@ qt_add_executable(session_test
 )
 target_include_directories(session_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(session_test PRIVATE Qt::Core Qt::Sql)
+
+# ---------------- Agent 只读工具自测（含路径越界拦截） ----------------
+qt_add_executable(tool_test
+    tests/tool_test.cpp
+    core/tools/pathguard.h
+    core/tools/pathguard.cpp
+    core/tools/itool.h
+    core/tools/readonlytools.h
+    core/tools/readonlytools.cpp
+    core/tools/toolregistry.h
+    core/tools/toolregistry.cpp
+)
+target_include_directories(tool_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(tool_test PRIVATE Qt::Core)
