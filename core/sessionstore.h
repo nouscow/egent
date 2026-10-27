@@ -48,7 +48,13 @@ public:
     bool touchSession(int id);
 
     QList<Message> messages(int sessionId) const;
-    bool appendMessage(int sessionId, Role role, const QString &content);
+    /**
+     * 追加一条消息；imagePath 非空时表示该消息携带本地图片附件
+     * （视觉问答 / 生图入会话均走此持久化路径）。
+     */
+    bool appendMessage(int sessionId, Role role, const QString &content,
+                       const QString &imagePath = QString(),
+                       const QString &imageMime = QString());
     /** 用完整文本覆盖最后一条 assistant 消息（流式结束后调用） */
     bool updateLastAssistant(int sessionId, const QString &content);
     /** 删除会话里最后一条消息（重新生成时用） */

@@ -12,6 +12,21 @@
 
 namespace {
 constexpr auto kConnection = "egent_main";
+
+/** 幂等补列：老库缺 image_* 列时 ALTER TABLE 增量迁移，避免破坏旧数据 */
+bool ensureColumn(QSqlDatabase &db, const QString &table, const QString &col,
+                  const QString &ddl)
+{
+    QSqlQuery q(db);
+    if (!q.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table)))
+        return false;
+    while (q.next()) {
+        if (q.value(1).toString() == col)
+            return true; // 已有
+    }
+    QSqlQuery alt(db);
+    return alt.exec(QStringLiteral("ALTER TABLE %1 ADD COLUMN %2").arg(table, ddl));
+}
 }
 
 SessionStore::~SessionStore()
@@ -102,6 +117,8 @@ bool SessionStore::ensureSchema()
                        "  session_id INTEGER NOT NULL,"
                        "  role TEXT NOT NULL,"
                        "  content TEXT NOT NULL,"
+                       "  image_path TEXT NOT NULL DEFAULT '',"
+                       "  image_mime TEXT NOT NULL DEFAULT '',"
                        "  created_at INTEGER NOT NULL,"
                        "  FOREIGN KEY(session_id) REFERENCES session(id) ON DELETE CASCADE)"),
         QStringLiteral("CREATE INDEX IF NOT EXISTS idx_message_session "
@@ -117,6 +134,16 @@ bool SessionStore::ensureSchema()
                 return false;
             }
         }
+    }
+
+    // 老库迁移：为已有 message 表补图片附件列（幂等）
+    if (!ensureColumn(db, QStringLiteral("message"), QStringLiteral("image_path"),
+                      QStringLiteral("image_path TEXT NOT NULL DEFAULT ''"))
+        || !ensureColumn(db, QStringLiteral("message"), QStringLiteral("image_mime"),
+                         QStringLiteral("image_mime TEXT NOT NULL DEFAULT ''"))) {
+        m_lastError = q.lastError().text();
+        qWarning().noquote() << "[db] 图片列迁移失败:" << m_lastError;
+        return false;
     }
     return true;
 }
@@ -220,27 +247,39 @@ QList<Message> SessionStore::messages(int sessionId) const
     QSqlDatabase db = QSqlDatabase::database(QLatin1String(kConnection));
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
-        "SELECT role, content FROM message WHERE session_id = ? ORDER BY id ASC"));
+        "SELECT role, content, image_path, image_mime FROM message WHERE session_id = ? ORDER BY id ASC"));
     q.addBindValue(sessionId);
     if (!q.exec())
         return out;
 
-    while (q.next())
-        out.append({roleFromStr(q.value(0).toString()), q.value(1).toString()});
+    while (q.next()) {
+        Message m;
+        m.role = roleFromStr(q.value(0).toString());
+        m.content = q.value(1).toString();
+        m.imagePath = q.value(2).toString();
+        m.imageMime = q.value(3).toString();
+        out.append(m);
+    }
     return out;
 }
 
-bool SessionStore::appendMessage(int sessionId, Role role, const QString &content)
+bool SessionStore::appendMessage(int sessionId, Role role, const QString &content,
+                                 const QString &imagePath, const QString &imageMime)
 {
     if (!m_open)
         return false;
     QSqlDatabase db = QSqlDatabase::database(QLatin1String(kConnection));
     QSqlQuery q(db);
     q.prepare(QStringLiteral(
-        "INSERT INTO message(session_id, role, content, created_at) VALUES(?, ?, ?, ?)"));
+        "INSERT INTO message(session_id, role, content, image_path, image_mime, created_at) "
+        "VALUES(?, ?, ?, ?, ?, ?)"));
     q.addBindValue(sessionId);
     q.addBindValue(roleToStr(role));
     q.addBindValue(content);
+    // 默认参数为 null QString，直接绑定会被 QtSql 当成 NULL 而违反 NOT NULL，
+    // 统一转为显式空串再绑定
+    q.addBindValue(imagePath.isNull() ? QStringLiteral("") : imagePath);
+    q.addBindValue(imageMime.isNull() ? QStringLiteral("") : imageMime);
     q.addBindValue(QDateTime::currentSecsSinceEpoch());
     const bool ok = q.exec();
     if (!ok)

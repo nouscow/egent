@@ -6,6 +6,9 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
+#include <QSqlDatabase>
+#include <QSqlError>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 
 static int g_pass = 0;
@@ -94,6 +97,68 @@ int main(int argc, char *argv[])
     check(reopened.open(dbPath), "重新打开成功", reopened.lastError());
     check(reopened.sessions().size() == 1, "数据仍在");
     check(reopened.messages(s2).size() == 1, "消息仍可读");
+
+    qInfo().noquote() << "\n[9] 图片附件读写（P1.1）";
+    check(reopened.appendMessage(s2, Role::User, QStringLiteral("看图"),
+                                 QStringLiteral("C:/shots/a.png"), QStringLiteral("image/png")),
+          "携带图片附件追加成功");
+    const QList<Message> withImg = reopened.messages(s2);
+    bool imgOk = false;
+    for (const auto &m : withImg) {
+        if (m.role == Role::User && m.imagePath == QStringLiteral("C:/shots/a.png")
+            && m.imageMime == QStringLiteral("image/png")) {
+            imgOk = true;
+        } else if (!m.imagePath.isEmpty()) {
+            imgOk = false; // 其它旧消息不应被误带图片
+        }
+    }
+    check(imgOk, "图片路径与 MIME 读回正确，且旧消息无脏字段");
+
+    qInfo().noquote() << "\n[10] 旧库兼容（无 image 列的库升级）";
+    QTemporaryDir tmp2;
+    check(tmp2.isValid(), "临时目录2 创建成功");
+    const QString legacyDb = tmp2.path() + QStringLiteral("/legacy.db");
+    {
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase(
+                QStringLiteral("QSQLITE"), QStringLiteral("legacy_conn"));
+            db.setDatabaseName(legacyDb);
+            check(db.open(), "旧库打开（手工建老 schema）");
+            QSqlQuery q(db);
+            q.exec(QStringLiteral("CREATE TABLE session ("
+                                  " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                                  " title TEXT NOT NULL,"
+                                  " created_at INTEGER NOT NULL,"
+                                  " updated_at INTEGER NOT NULL)"));
+            q.exec(QStringLiteral("CREATE TABLE message ("
+                                  " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                                  " session_id INTEGER NOT NULL,"
+                                  " role TEXT NOT NULL,"
+                                  " content TEXT NOT NULL,"
+                                  " created_at INTEGER NOT NULL,"
+                                  " FOREIGN KEY(session_id) REFERENCES session(id)"
+                                  " ON DELETE CASCADE)"));
+            q.exec(QStringLiteral("INSERT INTO session(id,title,created_at,updated_at)"
+                                  " VALUES(1,'旧会话',1,1)"));
+            q.exec(QStringLiteral("INSERT INTO message(id,session_id,role,content,created_at)"
+                                  " VALUES(1,1,'user','旧消息文本',1)"));
+            db.close();
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("legacy_conn"));
+    }
+
+    SessionStore legacy;
+    check(legacy.open(legacyDb), "旧库升级打开成功", legacy.lastError());
+    const QList<Message> oldMsgs = legacy.messages(1);
+    check(oldMsgs.size() == 1 && oldMsgs.first().content == QStringLiteral("旧消息文本"),
+          "旧数据原样可读");
+    check(oldMsgs.first().imagePath.isEmpty(), "旧消息图片字段为空（默认值）");
+    check(legacy.appendMessage(1, Role::User, QStringLiteral("升级后的新消息"),
+                               QStringLiteral("D:/x.png"), QStringLiteral("image/png")),
+          "升级后追加带图消息成功");
+    const QList<Message> upgraded = legacy.messages(1);
+    check(upgraded.size() == 2 && upgraded.last().imagePath == QStringLiteral("D:/x.png"),
+          "升级后图片消息可写可读");
 
     qInfo().noquote() << QStringLiteral("\n===== 通过 %1 / 失败 %2 =====").arg(g_pass).arg(g_fail);
     return g_fail == 0 ? 0 : 1;
