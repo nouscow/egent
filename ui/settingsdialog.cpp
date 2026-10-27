@@ -119,6 +119,12 @@ void SettingsDialog::buildUi()
                        "即使选「不再询问」也不会执行。"));
     form->addRow(QStringLiteral("命令执行"), m_commandPolicy);
 
+    m_writeEnabled = new QCheckBox(QStringLiteral("允许模型写文件（每次确认）"), this);
+    m_writeEnabled->setToolTip(
+        QStringLiteral("开启后模型可在工作区内创建或覆盖文件。\n"
+                       "每次写入都会展示完整内容让你确认，且不能删除文件。"));
+    form->addRow(QStringLiteral("文件写入"), m_writeEnabled);
+
     root->addLayout(form);
 
     auto *hint = new QLabel(
@@ -130,6 +136,9 @@ void SettingsDialog::buildUi()
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          this);
+    // 默认是英文 OK/Cancel，与界面其余中文不统一
+    buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("保存"));
+    buttons->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
     connect(buttons, &QDialogButtonBox::accepted, this, [this]() {
         saveToSettings();
         accept();
@@ -158,6 +167,7 @@ void SettingsDialog::loadFromSettings()
     else
         m_apiKey->setPlaceholderText(QStringLiteral("未设置，请填写 sk-..."));
 
+    m_writeEnabled->setChecked(s.value(QStringLiteral("agent/write_enabled"), false).toBool());
     m_agentEnabled->setChecked(s.value(QStringLiteral("agent/enabled"), false).toBool());
     m_workspace->setText(s.value(QStringLiteral("agent/workspace")).toString());
     const QString policy = s.value(QStringLiteral("agent/command_policy"),
@@ -179,6 +189,7 @@ void SettingsDialog::saveToSettings()
     s.setValue(QStringLiteral("agent/enabled"), m_agentEnabled->isChecked());
     s.setValue(QStringLiteral("agent/workspace"), m_workspace->text().trimmed());
     s.setValue(QStringLiteral("agent/command_policy"), m_commandPolicy->currentData().toString());
+    s.setValue(QStringLiteral("agent/write_enabled"), m_writeEnabled->isChecked());
 }
 
 double SettingsDialog::temperature() const
@@ -214,4 +225,9 @@ QString SettingsDialog::commandPolicy() const
 QString SettingsDialog::apiKey() const
 {
     return m_apiKey->text().trimmed();
+}
+
+bool SettingsDialog::writeEnabled() const
+{
+    return m_writeEnabled->isChecked();
 }

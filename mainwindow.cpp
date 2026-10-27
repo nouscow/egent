@@ -462,23 +462,44 @@ void MainWindow::onToolStarted(const QString &name, const QString &argsJson)
 
 void MainWindow::onPermissionRequired(const QString &toolName, const QString &detail)
 {
-    // 策略放行：从不询问；或本会话已经批准过一次
-    if (m_commandPolicy == QLatin1String("never")
-        || (m_commandPolicy == QLatin1String("session") && m_commandApprovedOnce)) {
+    const bool isWrite = (toolName == QLatin1String("write_file"));
+
+    // 命令有「从不询问」策略；写文件没有 —— L4 一律逐次确认
+    if (!isWrite
+        && (m_commandPolicy == QLatin1String("never")
+            || (m_commandPolicy == QLatin1String("session") && m_commandApprovedOnce))) {
         m_agentLoop->respondPermission(true);
         return;
     }
 
-    // argsJson 形如 {"command":"git status"}，直接把命令行抽出来给人看
     QString shown = detail;
+    QString title = QStringLiteral("确认执行命令");
+    QString question = QStringLiteral("模型请求在工作区执行以下命令：");
+
     const QJsonDocument doc = QJsonDocument::fromJson(detail.toUtf8());
-    if (doc.isObject())
-        shown = doc.object().value(QStringLiteral("command")).toString(detail);
+    const QJsonObject obj = doc.isObject() ? doc.object() : QJsonObject();
+
+    if (isWrite) {
+        title = QStringLiteral("确认写入文件");
+        question = QStringLiteral("模型请求写入以下文件：");
+        const QString path = obj.value(QStringLiteral("path")).toString();
+        QString content = obj.value(QStringLiteral("content")).toString();
+
+        // 只展示前 20 行，避免弹窗被长文件撑爆
+        const QStringList lines = content.split(QLatin1Char('\n'));
+        if (lines.size() > 20) {
+            content = lines.mid(0, 20).join(QLatin1Char('\n'))
+                      + QStringLiteral("\n…（共 %1 行，仅预览前 20 行）").arg(lines.size());
+        }
+        shown = path + QStringLiteral("\n\n") + content;
+    } else {
+        shown = obj.value(QStringLiteral("command")).toString(detail);
+    }
 
     QMessageBox box(this);
-    box.setWindowTitle(QStringLiteral("确认执行命令"));
+    box.setWindowTitle(title);
     box.setIcon(QMessageBox::Warning);
-    box.setText(QStringLiteral("模型请求在工作区执行以下命令："));
+    box.setText(question);
     box.setInformativeText(shown);
     box.setDetailedText(QStringLiteral("工具：%1\n参数：%2").arg(toolName, detail));
     box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
@@ -487,7 +508,7 @@ void MainWindow::onPermissionRequired(const QString &toolName, const QString &de
     box.button(QMessageBox::No)->setText(QStringLiteral("拒绝"));
 
     const bool granted = (box.exec() == QMessageBox::Yes);
-    if (granted && m_commandPolicy == QLatin1String("session"))
+    if (granted && !isWrite && m_commandPolicy == QLatin1String("session"))
         m_commandApprovedOnce = true;
 
     m_agentLoop->respondPermission(granted);
@@ -599,8 +620,11 @@ void MainWindow::applyParamsFromSettings()
     const bool allowCommand =
         agentOn && !workspace.isEmpty() && m_commandPolicy != QLatin1String("off");
 
+    const bool writeOn = s.value(QStringLiteral("agent/write_enabled"), false).toBool();
+    const bool allowWrite = agentOn && !workspace.isEmpty() && writeOn;
+
     if (agentOn && !workspace.isEmpty()) {
-        ToolRegistry::instance().registerDefaults(allowCommand);
+        ToolRegistry::instance().registerDefaults(allowCommand, allowWrite);
         PathGuard::instance().setWorkspace(workspace);
     } else {
         // 关掉时清空工作区，等于彻底关闭文件访问

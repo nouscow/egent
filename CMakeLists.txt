@@ -34,6 +34,8 @@ qt_add_library(egent_core STATIC
     core/tools/toolregistry.cpp
     core/tools/runcommandtool.h
     core/tools/runcommandtool.cpp
+    core/tools/writefiletool.h
+    core/tools/writefiletool.cpp
 )
 target_include_directories(egent_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(egent_core PUBLIC Qt::Core Qt::Network Qt::Sql)

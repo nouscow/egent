@@ -3,6 +3,7 @@
 #include "core/tools/pathguard.h"
 #include "core/tools/runcommandtool.h"
 #include "core/tools/toolregistry.h"
+#include "core/tools/writefiletool.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -162,6 +163,57 @@ int main(int argc, char *argv[])
               QStringLiteral("%1ms").arg(ms));
         check(!r.ok, "中止算作失败", r.content);
         check(r.content.contains(QStringLiteral("中止")), "返回明确的『已中止』说明", r.content);
+    }
+
+    // ---------------- 10. 文件写入（L4）----------------
+    qInfo().noquote() << "\n[10] 文件写入";
+    {
+        WriteFileTool wt;
+
+        check(!wt.execute(QJsonObject{{QStringLiteral("path"), QStringLiteral("a.txt")}}).ok,
+              "缺少 content 被拒绝");
+
+        check(!wt.execute(QJsonObject{{QStringLiteral("path"), QStringLiteral("../evil.txt")},
+                                      {QStringLiteral("content"), QStringLiteral("x")}}).ok,
+              "越界写入被拒绝");
+
+        {
+            const auto r = wt.execute(
+                QJsonObject{{QStringLiteral("path"), QStringLiteral("sub/new.txt")},
+                            {QStringLiteral("content"), QStringLiteral("hello")}});
+            check(r.ok, "创建文件（含多级目录）成功", r.content);
+            check(QFile::exists(tmp.path() + QStringLiteral("/sub/new.txt")),
+                  "文件确实落盘");
+        }
+
+        {
+            const auto r = wt.execute(
+                QJsonObject{{QStringLiteral("path"), QStringLiteral("sub/new.txt")},
+                            {QStringLiteral("content"), QStringLiteral("updated")}});
+            check(r.ok, "覆盖已有文件成功", r.content);
+            check(r.content.contains(QStringLiteral("已覆盖")), "明确告知是覆盖操作");
+
+            QFile f(tmp.path() + QStringLiteral("/sub/new.txt"));
+            f.open(QIODevice::ReadOnly);
+            check(QString::fromUtf8(f.readAll()) == QStringLiteral("updated"),
+                  "文件内容被正确替换");
+        }
+
+        {
+            const QByteArray big(WriteFileTool::kMaxWriteBytes + 16, 'x');
+            const auto r = wt.execute(
+                QJsonObject{{QStringLiteral("path"), QStringLiteral("big.txt")},
+                            {QStringLiteral("content"), QString::fromLatin1(big)}});
+            check(!r.ok, "超过 1MB 的内容被拒绝", r.content);
+        }
+
+        // 注册表：三个开关独立
+        ToolRegistry::instance().registerDefaults(false, false);
+        check(ToolRegistry::instance().find(QStringLiteral("write_file")) == nullptr,
+              "默认不注册写文件工具");
+        ToolRegistry::instance().registerDefaults(false, true);
+        check(ToolRegistry::instance().find(QStringLiteral("write_file")) != nullptr,
+              "单独开启写文件后注册成功");
     }
 
     qInfo().noquote() << QStringLiteral("\n===== 通过 %1 / 失败 %2 =====").arg(g_pass).arg(g_fail);

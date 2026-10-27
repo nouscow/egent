@@ -39,6 +39,8 @@ public:
     QString commandPolicy() const;
     /** 新填的 API Key；空表示不修改 */
     QString apiKey() const;
+    /** 是否允许模型写文件（L4，默认关闭） */
+    bool writeEnabled() const;
 
 private:
     void buildUi();
@@ -50,4 +52,5 @@ private:
     QLineEdit *m_workspace = nullptr;
     QComboBox *m_commandPolicy = nullptr;
     QLineEdit *m_apiKey = nullptr;
+    QCheckBox *m_writeEnabled = nullptr;
 };

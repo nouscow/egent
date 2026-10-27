@@ -2,6 +2,7 @@
 
 #include "core/tools/readonlytools.h"
 #include "core/tools/runcommandtool.h"
+#include "core/tools/writefiletool.h"
 
 #include <QDebug>
 
@@ -23,7 +24,7 @@ void ToolRegistry::add(std::unique_ptr<ITool> tool)
     m_tools[key] = std::move(tool);
 }
 
-void ToolRegistry::registerDefaults(bool includeCommandTool)
+void ToolRegistry::registerDefaults(bool includeCommandTool, bool includeWriteTool)
 {
     // 幂等到「单个工具」而不是整体：先注册了只读工具，
     // 之后再打开命令执行时，不能因为容器非空就整批跳过。
@@ -38,6 +39,9 @@ void ToolRegistry::registerDefaults(bool includeCommandTool)
 
     if (includeCommandTool)
         addIfMissing(std::make_unique<RunCommandTool>());
+
+    if (includeWriteTool)
+        addIfMissing(std::make_unique<WriteFileTool>());
 
     qInfo().noquote() << "[tools] 当前可用:" << names().join(QStringLiteral(", "));
 }

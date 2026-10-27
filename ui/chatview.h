@@ -5,6 +5,7 @@
 #include <QScrollArea>
 
 class MessageBubble;
+class QLabel;
 class QVBoxLayout;
 
 /**
@@ -45,6 +46,9 @@ signals:
 
 private:
     void scrollToBottom();
+    void updateEmptyHint();
+
+    QLabel *m_emptyHint = nullptr;
 
     QWidget *m_container = nullptr;
     QVBoxLayout *m_layout = nullptr;

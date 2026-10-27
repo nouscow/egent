@@ -2,6 +2,7 @@
 
 #include "messagebubble.h"
 
+#include <QLabel>
 #include <QScrollBar>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -24,7 +25,16 @@ ChatView::ChatView(QWidget *parent)
     m_layout->setSpacing(4);
     m_layout->addStretch(1); // 末尾留一个弹簧，让少量消息时贴顶显示
 
+    // 空状态：没有消息时给出引导，避免一片空白
+    m_emptyHint = new QLabel(
+        QStringLiteral("在下面输入问题开始对话\nCtrl+Enter 发送"), m_container);
+    m_emptyHint->setObjectName(QStringLiteral("emptyHint"));
+    m_emptyHint->setAlignment(Qt::AlignCenter);
+    m_layout->addWidget(m_emptyHint);
+    m_layout->addStretch(1);
+
     setWidget(m_container);
+    updateEmptyHint();
 }
 
 void ChatView::rebuild(const QList<QPair<QString, QString>> &messages)
@@ -38,6 +48,7 @@ void ChatView::rebuild(const QList<QPair<QString, QString>> &messages)
     for (const auto &m : messages)
         appendMessage(m.first, m.second);
 
+    updateEmptyHint();
     scrollToBottom();
 }
 
@@ -68,8 +79,15 @@ MessageBubble *ChatView::insertMessage(int index, const QString &role, const QSt
         emit regenerateRequested(m_bubbles.indexOf(bubble));
     });
 
+    updateEmptyHint();
     scrollToBottom();
     return bubble;
+}
+
+void ChatView::updateEmptyHint()
+{
+    if (m_emptyHint)
+        m_emptyHint->setVisible(m_bubbles.isEmpty());
 }
 
 void ChatView::updateLastText(const QString &text)

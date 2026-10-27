@@ -51,13 +51,27 @@ QString PathGuard::resolve(const QString &userPath, QString *error) const
     QString canon = target.canonicalFilePath();
 
     if (canon.isEmpty()) {
-        // 目标不存在：至少要把父目录解实，再拼回文件名，
-        // 否则 `工作区/../外面/新文件` 这类路径会绕过校验
-        const QFileInfo parent(target.absolutePath());
-        const QString parentCanon = parent.canonicalFilePath();
-        if (parentCanon.isEmpty())
+        // 目标不存在。必须先把「最接近的已存在祖先目录」解成真实路径，
+        // 再把缺失的各级名字拼回去——否则 `工作区/../外面/新文件` 这类
+        // 路径会绕过校验。
+        //
+        // 注意不能只解析直接父目录：写文件时父目录本身可能也不存在
+        // （要新建多级目录），那样会误判成「路径无法解析」。
+        QFileInfo probe(target.absolutePath());
+        QStringList missing;
+        while (!probe.exists() && !probe.isRoot()) {
+            missing.prepend(probe.fileName());
+            probe.setFile(probe.absolutePath());
+        }
+        const QString baseCanon = probe.canonicalFilePath();
+        if (baseCanon.isEmpty())
             return fail(QStringLiteral("路径无法解析: %1").arg(userPath));
-        canon = QDir::cleanPath(parentCanon + QLatin1Char('/') + target.fileName());
+
+        QString rebuilt = baseCanon;
+        for (const QString &part : missing)
+            rebuilt += QLatin1Char('/') + part;
+        rebuilt += QLatin1Char('/') + target.fileName();
+        canon = QDir::cleanPath(rebuilt);
     }
 
     canon = QDir::fromNativeSeparators(canon);

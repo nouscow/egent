@@ -388,3 +388,10 @@ QLabel#quotaLabel {
     font-size: 12px;
     padding: 6px 4px 2px 4px;
 }
+
+/* ---------- 对话区空状态 ---------- */
+QLabel#emptyHint {
+    color: {{text.placeholder}};
+    font-size: 13px;
+    line-height: 22px;
+}
