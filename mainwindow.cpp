@@ -27,6 +27,7 @@
 #include "core/tools/toolregistry.h"
 #include "ui/chatview.h"
 #include "ui/settingsdialog.h"
+#include "ui/messagebubble.h"
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QListWidget>
@@ -224,7 +225,22 @@ void MainWindow::buildUi()
     m_modelBox->setToolTip(QStringLiteral("模型选择（实时生效）"));
     m_modelBox->setMinimumWidth(150);
     m_modelBox->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    connect(m_modelBox, &QComboBox::currentIndexChanged,
+            this, &MainWindow::onModelSelected);
     toolLayout->addWidget(m_modelBox);
+
+    // 恢复上次选择的厂商与模型（持久化，重启后保持）
+    {
+        QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+        const QString savedProv = s.value(QStringLiteral("ui/provider_id")).toString();
+        const int pi = savedProv.isEmpty() ? -1 : m_providerBox->findData(savedProv);
+        if (pi >= 0 && pi != m_providerBox->currentIndex())
+            m_providerBox->setCurrentIndex(pi); // 触发 onProviderSelected → 恢复模型
+        const QString savedModel = s.value(QStringLiteral("ui/model")).toString();
+        const int mi = m_modelBox->findText(savedModel);
+        if (mi >= 0)
+            m_modelBox->setCurrentIndex(mi);
+    }
 
     m_themeBox = new QComboBox(toolbar);
     const QStringList ids = ThemeManager::instance().availableThemes();
@@ -520,6 +536,8 @@ void MainWindow::onSessionContextMenu(const QPoint &pos)
     QMenu menu(this);
     QAction *renameAct = menu.addAction(QStringLiteral("重命名"));
     QAction *exportAct = menu.addAction(QStringLiteral("导出为 Markdown…"));
+    QAction *exportHtmlAct = menu.addAction(QStringLiteral("导出为 HTML…"));
+    QAction *clearAct = menu.addAction(QStringLiteral("清空消息"));
     menu.addSeparator();
     QAction *deleteAct = menu.addAction(QStringLiteral("删除会话"));
 
@@ -535,6 +553,20 @@ void MainWindow::onSessionContextMenu(const QPoint &pos)
         }
     } else if (chosen == exportAct) {
         onExportSession(id);
+    } else if (chosen == exportHtmlAct) {
+        onExportSessionHtml(id);
+    } else if (chosen == clearAct) {
+        const auto ret = QMessageBox::question(
+            this, QStringLiteral("清空消息"),
+            QStringLiteral("确定清空「%1」的全部对话内容？此操作不可撤销。").arg(item->text()));
+        if (ret != QMessageBox::Yes)
+            return;
+        if (!m_store.truncateAfter(id, 0))
+            return;
+        reloadSessionList();
+        if (id == m_currentSessionId)
+            loadSession(id);
+        statusBar()->showMessage(QStringLiteral("已清空消息"), 3000);
     } else if (chosen == deleteAct) {
         const auto ret = QMessageBox::question(
             this, QStringLiteral("删除会话"),
@@ -594,7 +626,24 @@ void MainWindow::onProviderSelected(int index)
         connect(m_provider, &IModelProvider::imageError, this, &MainWindow::onImageError);
     }
     refreshModelList();
+
+    // 持久化：记住本次选择的厂商与模型，重启后保持（P2 小增强）
+    {
+        QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+        s.setValue(QStringLiteral("ui/provider_id"), id);
+        const QString savedModel = s.value(QStringLiteral("ui/model")).toString();
+        const int mi = m_modelBox->findText(savedModel);
+        if (mi >= 0)
+            m_modelBox->setCurrentIndex(mi);
+    }
+
     applyParamsFromSettings(); // 新厂商的 Key / 工具开关重新下发
+}
+
+void MainWindow::onModelSelected(int)
+{
+    QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    s.setValue(QStringLiteral("ui/model"), m_modelBox->currentText());
 }
 
 void MainWindow::startRequest(const QList<Message> &history)
@@ -936,6 +985,101 @@ bool MainWindow::exportSessionToFile(int sessionId, const QString &path, QString
         ts << (m.role == Role::User ? "## 你\n\n" : "## Egent\n\n");
         ts << m.content << "\n\n";
     }
+    f.close();
+    return true;
+}
+
+void MainWindow::onExportSessionHtml(int sessionId)
+{
+    const QList<Message> msgs = m_store.messages(sessionId);
+    if (msgs.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("导出"),
+                                 QStringLiteral("这个会话还没有内容。"));
+        return;
+    }
+
+    QString title = QStringLiteral("会话");
+    for (const auto &info : m_store.sessions()) {
+        if (info.id == sessionId) {
+            title = info.title;
+            break;
+        }
+    }
+
+    QString safe = title;
+    safe.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+    const QString suggested =
+        QDir(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation))
+            .filePath(safe + QStringLiteral(".html"));
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, QStringLiteral("导出对话"), suggested,
+        QStringLiteral("HTML (*.html);;所有文件 (*)"));
+    if (path.isEmpty())
+        return;
+
+    QString err;
+    if (!exportSessionToHtmlFile(sessionId, path, &err)) {
+        QMessageBox::warning(this, QStringLiteral("导出失败"), err);
+        return;
+    }
+
+    statusBar()->showMessage(QStringLiteral("已导出到 %1").arg(path), 5000);
+}
+
+bool MainWindow::exportSessionToHtmlFile(int sessionId, const QString &path, QString *error)
+{
+    if (sessionId <= 0)
+        sessionId = m_currentSessionId;
+    if (sessionId <= 0) {
+        if (error)
+            *error = QStringLiteral("没有可导出的会话");
+        return false;
+    }
+
+    const QList<Message> msgs = m_store.messages(sessionId);
+    if (msgs.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("这个会话还没有内容");
+        return false;
+    }
+
+    QString title = QStringLiteral("会话");
+    for (const auto &info : m_store.sessions()) {
+        if (info.id == sessionId) {
+            title = info.title;
+            break;
+        }
+    }
+
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        if (error)
+            *error = f.errorString();
+        return false;
+    }
+
+    QTextStream ts(&f);
+    ts.setEncoding(QStringConverter::Utf8);
+    ts << "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n";
+    ts << "<title>" << title.toHtmlEscaped() << "</title>\n";
+    ts << MessageBubble::markdownCss() << "\n";
+    ts << "<style>\n"
+          "body{font-family:-apple-system,'Segoe UI',Roboto,'Microsoft YaHei',sans-serif;"
+          "background:#f5f6f8;color:#1b1f28;margin:0;padding:24px;line-height:1.6;}\n"
+          ".msg{max-width:760px;margin:12px auto;padding:12px 16px;border-radius:14px;"
+          "white-space:pre-wrap;word-wrap:break-word;}\n"
+          ".user{background:#e6e9ef;text-align:right;}\n"
+          ".assistant{background:#ffffff;border:1px solid #e3e6ea;}\n"
+          ".meta{color:#8a8f99;font-size:13px;text-align:center;}\n"
+          "</style>\n";
+    ts << "</head>\n<body>\n";
+    ts << "<h1>" << title.toHtmlEscaped() << "</h1>\n";
+    ts << "<p class='meta'>导出自 Egent · "
+       << QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm") << "</p>\n";
+    for (const Message &m : msgs)
+        ts << MessageBubble::messageFragment(roleToStr(m.role), m.content) << "\n";
+    ts << "</body>\n</html>\n";
     f.close();
     return true;
 }

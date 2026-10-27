@@ -71,6 +71,7 @@ void SettingsDialog::buildUi()
     form->addRow(m_apiKeyLabel, keyRow);
 
     m_temperature = new QDoubleSpinBox(this);
+    m_temperature->setObjectName(QStringLiteral("temperature"));
     m_temperature->setRange(0.0, 2.0);
     m_temperature->setSingleStep(0.1);
     m_temperature->setDecimals(1);
@@ -78,12 +79,14 @@ void SettingsDialog::buildUi()
     form->addRow(QStringLiteral("Temperature"), m_temperature);
 
     m_maxTokens = new QSpinBox(this);
+    m_maxTokens->setObjectName(QStringLiteral("maxTokens"));
     m_maxTokens->setRange(64, 32768);
     m_maxTokens->setSingleStep(256);
     m_maxTokens->setToolTip(QStringLiteral("单次回答的最大长度，太小会被截断。"));
     form->addRow(QStringLiteral("Max tokens"), m_maxTokens);
 
     m_timeoutSec = new QSpinBox(this);
+    m_timeoutSec->setObjectName(QStringLiteral("timeoutSec"));
     m_timeoutSec->setRange(5, 300);
     m_timeoutSec->setSingleStep(5);
     m_timeoutSec->setSuffix(QStringLiteral(" 秒"));
@@ -167,6 +170,16 @@ void SettingsDialog::buildUi()
     about->setOpenExternalLinks(false);
     connect(about, &QLabel::linkActivated, this, &SettingsDialog::showAbout);
     root->addWidget(about);
+
+    // 一键把采样参数还原为默认值（仅改控件，仍需点「保存」生效）
+    auto *resetBtn = new QPushButton(QStringLiteral("恢复默认参数"), this);
+    resetBtn->setToolTip(QStringLiteral("temperature / max_tokens / 超时 还原为默认值"));
+    connect(resetBtn, &QPushButton::clicked, this, [this]() {
+        m_temperature->setValue(kDefaultTemperature);
+        m_maxTokens->setValue(kDefaultMaxTokens);
+        m_timeoutSec->setValue(kDefaultTimeoutSec);
+    });
+    root->addWidget(resetBtn);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
                                          this);

@@ -37,6 +37,10 @@ public:
      * 抽成 public 是为了让自动化验证能绕过文件对话框直接落盘。
      */
     bool exportSessionToFile(int sessionId, const QString &path, QString *error = nullptr);
+    /**
+     * 导出会话为 HTML（P2.3）。sessionId <= 0 表示当前会话。
+     */
+    bool exportSessionToHtmlFile(int sessionId, const QString &path, QString *error = nullptr);
 
 private slots:
     void onThemeChanged(const QString &id);
@@ -44,6 +48,8 @@ private slots:
     void onSendClicked();
     void openSettings();
     void onProviderSelected(int index);
+    /** 模型切换：持久化到 QSettings，重启后记住选择 */
+    void onModelSelected(int index);
     void onCopyMessage(const QString &text);
     void onToolStarted(const QString &name, const QString &argsJson);
     void onToolFinished(const QString &name, bool ok, const QString &result);
@@ -54,6 +60,7 @@ private slots:
     void onSessionActivated(QListWidgetItem *item);
     void onSessionContextMenu(const QPoint &pos);
     void onExportSession(int sessionId);
+    void onExportSessionHtml(int sessionId);
     void onProviderToken(const QString &delta);
     void onProviderFinished();
     void onProviderError(const QString &msg);

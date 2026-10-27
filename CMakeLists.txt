@@ -161,3 +161,12 @@ target_link_libraries(cmd_test PRIVATE egent_core)
 # Agent 端到端：真实模型 + 工具循环（需要 DASHSCOPE_API_KEY）
 qt_add_executable(agent_test tests/agent_test.cpp)
 target_link_libraries(agent_test PRIVATE egent_core)
+
+# 设置面板「恢复默认参数」按钮（需要 QApplication，offscreen 跑）
+qt_add_executable(settingsdialog_test
+    tests/settingsdialog_test.cpp
+    ui/settingsdialog.cpp
+)
+target_include_directories(settingsdialog_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(settingsdialog_test PRIVATE EGENT_VERSION="${PROJECT_VERSION}")
+target_link_libraries(settingsdialog_test PRIVATE egent_core Qt::Widgets)

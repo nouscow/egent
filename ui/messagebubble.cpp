@@ -159,23 +159,17 @@ void MessageBubble::showContextMenu(const QPoint &globalPos)
     menu.exec(globalPos);
 }
 
-QString MessageBubble::renderMarkdown(const QString &markdown)
+QString MessageBubble::markdownCss()
 {
-    // Qt 6 自带 Markdown 解析（底层 md4c，默认 GitHub 方言），
-    // 表格/代码块/加粗都支持，因此不需要引入第三方库。
-    QTextDocument doc;
-    doc.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
-    QString html = doc.toHtml();
-
     // Qt 生成的 HTML 自带一套浅色默认样式，在深色主题下会黑字黑底。
-    // 这里追加一段样式覆盖它（后定义的规则优先级更高）。
+    // 这里追加一段主题化样式覆盖它（后定义的规则优先级更高）。
     const ThemeManager &tm = ThemeManager::instance();
     const QString text = tm.token(QStringLiteral("chat.assistantBubble.text"));
     const QString border = tm.token(QStringLiteral("border.default"));
     const QString codeBg = tm.token(QStringLiteral("bg.window"));
     const QString accent = tm.token(QStringLiteral("accent"));
 
-    const QString css = QStringLiteral(
+    return QStringLiteral(
         "<style>"
         "body { color: %1; }"
         "td, th { border: 1px solid %2; padding: 4px 8px; }"
@@ -187,12 +181,48 @@ QString MessageBubble::renderMarkdown(const QString &markdown)
         "hr { border: none; border-top: 1px solid %2; }"
         "</style>")
         .arg(text, border, codeBg, codeBg, accent);
+}
+
+QString MessageBubble::markdownBody(const QString &markdown)
+{
+    // Qt 6 自带 Markdown 解析（底层 md4c，默认 GitHub 方言），
+    // 表格/代码块/加粗都支持，因此不需要引入第三方库。
+    QTextDocument doc;
+    doc.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
+    QString html = doc.toHtml();
+
+    // 只取 <body> 内部内容，便于嵌进导出的独立 HTML 文档。
+    const int bodyStart = html.indexOf(QStringLiteral("<body"));
+    if (bodyStart >= 0) {
+        const int gt = html.indexOf(QLatin1Char('>'), bodyStart);
+        if (gt >= 0) {
+            const int end = html.indexOf(QStringLiteral("</body>"), gt);
+            if (end >= 0)
+                return html.mid(gt + 1, end - gt - 1);
+        }
+    }
+    return html;
+}
+
+QString MessageBubble::messageFragment(const QString &role, const QString &content)
+{
+    if (role == QStringLiteral("assistant") && !content.isEmpty())
+        return QStringLiteral("<div class='msg assistant'>%1</div>").arg(markdownBody(content));
+    // 用户/工具消息按纯文本处理，避免把随手打的符号当成语法（与界面一致）。
+    return QStringLiteral("<div class='msg user'>%1</div>").arg(content.toHtmlEscaped());
+}
+
+QString MessageBubble::renderMarkdown(const QString &markdown)
+{
+    QTextDocument doc;
+    doc.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
+    QString html = doc.toHtml();
 
     const int headEnd = html.indexOf(QStringLiteral("</head>"));
     if (headEnd >= 0)
-        html.insert(headEnd, css);
+        html.insert(headEnd, markdownCss());
     else
-        html.prepend(css);
+        html.prepend(markdownCss());
 
     return html;
 }

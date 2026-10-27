@@ -28,6 +28,11 @@ public:
     void setText(const QString &text);
     QString text() const;
 
+    /** 导出为 HTML 时复用：把单条消息渲染成自包含 HTML 片段（P2.3） */
+    static QString markdownCss();
+    static QString markdownBody(const QString &markdown);
+    static QString messageFragment(const QString &role, const QString &content);
+
     Role role() const { return m_role; }
 
 signals:
