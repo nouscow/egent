@@ -29,6 +29,8 @@ void AgentLoop::start(const QList<Message> &history)
     m_history = history;
     m_round = 0;
     m_accumulated.clear();
+    m_cancelled = false;
+    m_currentTool = nullptr;
     m_running = true;
     request();
 }
@@ -37,6 +39,11 @@ void AgentLoop::cancel()
 {
     if (!m_running)
         return;
+
+    m_cancelled = true;
+    // 先中止正在跑的工具（可能是一条耗时命令），再停网络请求
+    if (m_currentTool)
+        m_currentTool->abort();
     if (m_provider)
         m_provider->cancel();
 }
@@ -147,6 +154,7 @@ void AgentLoop::onToolCalls(const QJsonArray &calls)
 
         emit toolCallStarted(name, argsJson);
 
+        m_currentTool = tool;
         if (!tool) {
             result = ToolResult::failure(
                 QStringLiteral("没有名为 %1 的工具").arg(name));
@@ -161,6 +169,8 @@ void AgentLoop::onToolCalls(const QJsonArray &calls)
             }
         }
 
+        m_currentTool = nullptr;
+
         emit toolCallFinished(name, result.ok, result.content);
         qInfo().noquote() << QStringLiteral("[agent] %1 -> %2")
                                  .arg(name, result.ok ? QStringLiteral("ok")
@@ -172,6 +182,13 @@ void AgentLoop::onToolCalls(const QJsonArray &calls)
         toolMsg.toolCallId = callId;
         toolMsg.name = name;
         m_history.append(toolMsg);
+    }
+
+    // 用户点了停止：不再继续下一轮，也不再执行剩余的工具调用
+    if (m_cancelled) {
+        m_running = false;
+        emit finished(m_history);
+        return;
     }
 
     // 3) 轮次上限：防模型反复读同一个文件停不下来

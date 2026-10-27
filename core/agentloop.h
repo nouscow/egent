@@ -2,6 +2,7 @@
 
 #include "core/models.h"
 #include "core/providers/imodelprovider.h"
+#include "core/tools/itool.h"
 
 #include <QEventLoop>
 #include <QJsonArray>
@@ -82,4 +83,8 @@ private:
     // 权限等待：用嵌套事件循环阻塞工具执行，直到界面给出答复
     QEventLoop *m_permissionLoop = nullptr;
     bool m_permissionGranted = false;
+
+    // 正在执行的工具（取消时要把中止转给它，否则耗时的命令停不下来）
+    ITool *m_currentTool = nullptr;
+    bool m_cancelled = false;
 };

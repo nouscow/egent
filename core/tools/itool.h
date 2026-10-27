@@ -44,4 +44,11 @@ public:
      * 不受用户确认策略影响。
      */
     virtual bool requiresConfirmation() const { return false; }
+
+    /**
+     * 中止正在进行的执行（由界面在用户点「停止」时调用）。
+     * 只读工具是瞬时操作，无需实现；耗时工具必须实现，
+     * 否则用户点了停止还要等它自己跑完。
+     */
+    virtual void abort() {}
 };

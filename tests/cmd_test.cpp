@@ -8,8 +8,10 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QElapsedTimer>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QTimer>
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -119,6 +121,48 @@ int main(int argc, char *argv[])
           "显式开启后注册成功");
     check(ToolRegistry::instance().names().size() == 4, "共 4 个工具",
           ToolRegistry::instance().names().join(QStringLiteral(",")));
+
+    // ---------------- 8. 执行期间界面不能冻结 ----------------
+    qInfo().noquote() << "\n[8] 执行期间事件循环仍在运行";
+    {
+        int ticks = 0;
+        QTimer ticker;
+        QObject::connect(&ticker, &QTimer::timeout, [&ticks]() { ++ticks; });
+        ticker.start(50);
+
+        QElapsedTimer clock;
+        clock.start();
+        const auto r = tool.execute(
+            QJsonObject{{QStringLiteral("command"),
+                         QStringLiteral("ping -n 3 127.0.0.1 > nul")}});
+        const qint64 ms = clock.elapsed();
+        ticker.stop();
+
+        check(ms > 1000, "命令确实执行了一段时间",
+              QStringLiteral("%1ms").arg(ms));
+        // 关键断言：如果执行期间阻塞了 UI 线程，定时器一次都不会触发
+        check(ticks >= 10, "期间定时器持续触发（事件循环未被阻塞）",
+              QStringLiteral("ticks=%1，理论应有 %2 次左右").arg(ticks).arg(ms / 50));
+        Q_UNUSED(r)
+    }
+
+    // ---------------- 9. 中止正在执行的命令 ----------------
+    qInfo().noquote() << "\n[9] 中止";
+    {
+        QTimer::singleShot(400, [&tool]() { tool.abort(); });
+
+        QElapsedTimer clock;
+        clock.start();
+        const auto r = tool.execute(
+            QJsonObject{{QStringLiteral("command"),
+                         QStringLiteral("ping -n 10 127.0.0.1 > nul")}});
+        const qint64 ms = clock.elapsed();
+
+        check(ms < 5000, "命令被提前中止（没跑满 10 秒）",
+              QStringLiteral("%1ms").arg(ms));
+        check(!r.ok, "中止算作失败", r.content);
+        check(r.content.contains(QStringLiteral("中止")), "返回明确的『已中止』说明", r.content);
+    }
 
     qInfo().noquote() << QStringLiteral("\n===== 通过 %1 / 失败 %2 =====").arg(g_pass).arg(g_fail);
     return g_fail == 0 ? 0 : 1;

@@ -2,10 +2,11 @@
 
 #include "core/tools/pathguard.h"
 
+#include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QProcess>
-#include <QStringList>
+#include <QTimer>
 
 QString RunCommandTool::description() const
 {
@@ -29,8 +30,8 @@ QJsonObject RunCommandTool::parametersSchema() const
 
 bool RunCommandTool::isBlocked(const QString &command, QString *reason)
 {
-    // 硬性黑名单：破坏性、不可逆、或会波及工作区之外的操作。
-    // 这些不看用户是否点了「允许」—— 一旦执行就没有回头路。
+    // 破坏性、不可逆、或会波及工作区之外的操作。
+    // 不看用户是否点了「允许」—— 这类操作没有回头路。
     struct Rule
     {
         const char *pattern;
@@ -64,9 +65,16 @@ bool RunCommandTool::isBlocked(const QString &command, QString *reason)
     return false;
 }
 
+void RunCommandTool::abort()
+{
+    m_abort.storeRelaxed(1);
+    if (m_proc && m_proc->state() != QProcess::NotRunning)
+        m_proc->kill();
+}
+
 ToolResult RunCommandTool::execute(const QJsonObject &args)
 {
-    QString command = args.value(QStringLiteral("command")).toString().trimmed();
+    const QString command = args.value(QStringLiteral("command")).toString().trimmed();
     if (command.isEmpty())
         return ToolResult::failure(QStringLiteral("缺少 command 参数"));
 
@@ -80,21 +88,62 @@ ToolResult RunCommandTool::execute(const QJsonObject &args)
     if (workDir.isEmpty())
         return ToolResult::failure(QStringLiteral("未设置工作区，无法确定命令的执行目录"));
 
+    m_abort.storeRelaxed(0);
+
     QProcess proc;
     proc.setWorkingDirectory(workDir);
     proc.setProcessChannelMode(QProcess::MergedChannels);
 
+    m_proc = &proc;
+
+    QEventLoop loop;
+    bool timedOut = false;
+    bool failedToStart = false;
+
+    QObject::connect(&proc, &QProcess::errorOccurred, &loop,
+                     [&](QProcess::ProcessError err) {
+                         if (err == QProcess::FailedToStart) {
+                             failedToStart = true;
+                             loop.quit();
+                         }
+                     });
+    QObject::connect(&proc,
+                     QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                     &loop, [&](int, QProcess::ExitStatus) { loop.quit(); });
+
+    QTimer timeout;
+    timeout.setSingleShot(true);
+    QObject::connect(&timeout, &QTimer::timeout, &loop, [&]() {
+        timedOut = true;
+        loop.quit();
+    });
+
     // Windows 下统一走 cmd，保证 &&、重定向等写法可用
     proc.start(QStringLiteral("cmd.exe"), {QStringLiteral("/c"), command});
-    if (!proc.waitForStarted(5000))
-        return ToolResult::failure(QStringLiteral("命令启动失败: %1").arg(proc.errorString()));
+    timeout.start(kTimeoutMs);
 
-    if (!proc.waitForFinished(kTimeoutMs)) {
+    // 关键：用局部事件循环等信号，而不是 waitForFinished()。
+    // 嵌套循环仍在处理界面事件，因此窗口不会卡死，停止按钮也能生效。
+    loop.exec();
+
+    timeout.stop();
+    m_proc = nullptr;
+
+    const bool aborted = m_abort.loadRelaxed() != 0;
+
+    if (proc.state() != QProcess::NotRunning) {
         proc.kill();
-        proc.waitForFinished(2000);
+        // 这里必须短等，确保进程真的退出、输出能读到
+        proc.waitForFinished(1000);
+    }
+
+    if (aborted)
+        return ToolResult::failure(QStringLiteral("命令被用户中止。"));
+    if (failedToStart)
+        return ToolResult::failure(QStringLiteral("命令启动失败: %1").arg(proc.errorString()));
+    if (timedOut)
         return ToolResult::failure(
             QStringLiteral("命令超时（超过 %1 秒），已强制结束。").arg(kTimeoutMs / 1000));
-    }
 
     QByteArray out = proc.readAll();
     const bool truncated = out.size() > kMaxOutputBytes;
