@@ -89,3 +89,6 @@ CMakeLists.txt.user*
 *.pem
 *.pfx
 .env
+
+# ---- 打包产物（63MB，不入库）----
+/dist/
