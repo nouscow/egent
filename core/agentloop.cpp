@@ -9,8 +9,16 @@
 
 AgentLoop::AgentLoop(IModelProvider *provider, QObject *parent)
     : QObject(parent)
-    , m_provider(provider)
 {
+    bindProvider(provider);
+}
+
+void AgentLoop::bindProvider(IModelProvider *provider)
+{
+    if (m_provider)
+        disconnect(m_provider, nullptr, this, nullptr);
+
+    m_provider = provider;
     if (!m_provider)
         return;
 
@@ -22,6 +30,13 @@ AgentLoop::AgentLoop(IModelProvider *provider, QObject *parent)
             this, &AgentLoop::onProviderFinished);
     connect(m_provider, &IModelProvider::errorOccurred,
             this, &AgentLoop::onProviderError);
+}
+
+void AgentLoop::setProvider(IModelProvider *provider)
+{
+    if (m_running)
+        return; // 生成中不换厂商，避免请求被劫持
+    bindProvider(provider);
 }
 
 void AgentLoop::start(const QList<Message> &history)

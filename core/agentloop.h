@@ -31,6 +31,8 @@ public:
     explicit AgentLoop(IModelProvider *provider, QObject *parent = nullptr);
 
     void setModel(const QString &model) { m_model = model; }
+    /** 切换厂商时换绑 provider（会重新连接信号） */
+    void setProvider(IModelProvider *provider);
     void setMaxRounds(int rounds) { m_maxRounds = qMax(1, rounds); }
 
     /** 开始一轮完整对话；history 里应当已包含本次用户提问 */
@@ -69,6 +71,7 @@ private slots:
 
 private:
     void request();
+    void bindProvider(IModelProvider *provider);
     /** 阻塞等待用户许可；超时按拒绝处理 */
     bool askPermission(const QString &toolName, const QString &detail);
 

@@ -2,7 +2,8 @@
 // 用法：DASHSCOPE_API_KEY 已在环境变量中，直接运行即可。
 // 退出码 0 = 通过，1 = 失败。
 
-#include "core/providers/bailianprovider.h"
+#include "core/providers/openaicompatprovider.h"
+#include "core/providers/providerregistry.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -19,7 +20,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    BailianProvider provider;
+    OpenAiCompatProvider provider(ProviderRegistry::bailianConfig());
 
     QStringList deltas;
     QString error;

@@ -52,5 +52,6 @@ private:
     QLineEdit *m_workspace = nullptr;
     QComboBox *m_commandPolicy = nullptr;
     QLineEdit *m_apiKey = nullptr;
+    class QLabel *m_apiKeyLabel = nullptr;
     QCheckBox *m_writeEnabled = nullptr;
 };

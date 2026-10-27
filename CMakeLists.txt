@@ -19,8 +19,10 @@ qt_add_library(egent_core STATIC
     core/sessionstore.h
     core/sessionstore.cpp
     core/providers/imodelprovider.h
-    core/providers/bailianprovider.h
-    core/providers/bailianprovider.cpp
+    core/providers/openaicompatprovider.h
+    core/providers/openaicompatprovider.cpp
+    core/providers/providerregistry.h
+    core/providers/providerregistry.cpp
     core/agentloop.h
     core/agentloop.cpp
 

@@ -1,5 +1,7 @@
 #include "settingsdialog.h"
 
+#include "core/providers/providerregistry.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -56,13 +58,16 @@ void SettingsDialog::buildUi()
     clearKeyBtn->setToolTip(QStringLiteral("删除本地保存的 Key"));
     connect(clearKeyBtn, &QPushButton::clicked, this, [this]() {
         QSettings st(QStringLiteral("egent"), QStringLiteral("egent"));
-        st.remove(QStringLiteral("dashscope_api_key"));
+        st.remove(ProviderRegistry::instance()
+                      .configFor(ProviderRegistry::instance().currentId())
+                      .settingsKey);
         m_apiKey->clear();
         m_apiKey->setPlaceholderText(QStringLiteral("已清除，请重新填写"));
     });
     keyLayout->addWidget(clearKeyBtn);
 
-    form->addRow(QStringLiteral("API Key"), keyRow);
+    m_apiKeyLabel = new QLabel(QStringLiteral("API Key"), this);
+    form->addRow(m_apiKeyLabel, keyRow);
 
     m_temperature = new QDoubleSpinBox(this);
     m_temperature->setRange(0.0, 2.0);
@@ -156,16 +161,22 @@ void SettingsDialog::loadFromSettings()
         s.value(QStringLiteral("params/max_tokens"), kDefaultMaxTokens).toInt());
     m_timeoutSec->setValue(
         s.value(QStringLiteral("params/timeout_sec"), kDefaultTimeoutSec).toInt());
-    // Key 永不回显：环境变量优先，其次本地保存，两者都没有才提示填写
-    const bool fromEnv = !qgetenv("DASHSCOPE_API_KEY").isEmpty();
-    const bool hasSaved = !s.value(QStringLiteral("dashscope_api_key")).toString().isEmpty();
+    // Key 永不回显：环境变量优先，其次本地保存，两者都没有才提示填写。
+    // 键名与标签跟随当前厂商，切厂商后在设置里填各自的 Key。
+    const auto cfg = ProviderRegistry::instance().configFor(
+        ProviderRegistry::instance().currentId());
+    m_apiKeyLabel->setText(cfg.displayName + QStringLiteral(" API Key"));
+
+    const bool fromEnv = !cfg.envVar.isEmpty() && !qgetenv(cfg.envVar.toUtf8()).isEmpty();
+    const bool hasSaved = !s.value(cfg.settingsKey).toString().isEmpty();
     m_apiKey->clear();
     if (fromEnv)
-        m_apiKey->setPlaceholderText(QStringLiteral("使用环境变量 DASHSCOPE_API_KEY（优先级最高）"));
+        m_apiKey->setPlaceholderText(
+            QStringLiteral("使用环境变量 %1（优先级最高）").arg(cfg.envVar));
     else if (hasSaved)
         m_apiKey->setPlaceholderText(QStringLiteral("已保存，留空则保持不变"));
     else
-        m_apiKey->setPlaceholderText(QStringLiteral("未设置，请填写 sk-..."));
+        m_apiKey->setPlaceholderText(QStringLiteral("未设置，请填写"));
 
     m_writeEnabled->setChecked(s.value(QStringLiteral("agent/write_enabled"), false).toBool());
     m_agentEnabled->setChecked(s.value(QStringLiteral("agent/enabled"), false).toBool());
@@ -179,9 +190,11 @@ void SettingsDialog::loadFromSettings()
 void SettingsDialog::saveToSettings()
 {
     QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    const auto cfg = ProviderRegistry::instance().configFor(
+        ProviderRegistry::instance().currentId());
     const QString key = m_apiKey->text().trimmed();
     if (!key.isEmpty())
-        s.setValue(QStringLiteral("dashscope_api_key"), key);
+        s.setValue(cfg.settingsKey, key);
 
     s.setValue(QStringLiteral("params/temperature"), m_temperature->value());
     s.setValue(QStringLiteral("params/max_tokens"), m_maxTokens->value());

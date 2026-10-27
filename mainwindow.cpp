@@ -2,7 +2,7 @@
 #include "ui_mainwindow.h"
 
 #include "theme/thememanager.h"
-#include "core/providers/bailianprovider.h"
+#include "core/providers/providerregistry.h"
 #include "core/models.h"
 
 #include <QTimer>
@@ -21,6 +21,7 @@
 #include <QShortcut>
 #include <QStyle>
 #include "core/agentloop.h"
+#include "core/providers/providerregistry.h"
 #include "core/tools/pathguard.h"
 #include "core/tools/toolregistry.h"
 #include "ui/chatview.h"
@@ -48,6 +49,11 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    // 必须先注册厂商：buildUi() 里的厂商/模型下拉要读注册表，
+    // 放在 buildUi 之后会拿到空列表，界面出现两个空白下拉框。
+    ProviderRegistry::instance().registerBuiltins();
+
     setWindowTitle(QStringLiteral("Egent · 百炼"));
     resize(980, 760);
 
@@ -63,7 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
     // ---- 真实流式接口 + Agent 循环 ----
     // 界面不再直连 provider：所有请求都经过 AgentLoop，
     // 由它决定「这一轮是最终回答，还是要先调工具」。
-    m_provider = new BailianProvider(this);
+    m_provider = ProviderRegistry::instance().current();
     m_agentLoop = new AgentLoop(m_provider, this);
     connect(m_agentLoop, &AgentLoop::contentDelta, this, &MainWindow::onProviderToken);
     connect(m_agentLoop, &AgentLoop::finished, this,
@@ -175,10 +181,23 @@ void MainWindow::buildUi()
 
     toolLayout->addStretch(1);
 
+    m_providerBox = new QComboBox(toolbar);
+    for (const QString &id : ProviderRegistry::instance().ids())
+        m_providerBox->addItem(ProviderRegistry::instance().displayName(id), id);
+    {
+        const int idx = m_providerBox->findData(ProviderRegistry::instance().currentId());
+        m_providerBox->blockSignals(true);
+        m_providerBox->setCurrentIndex(idx >= 0 ? idx : 0);
+        m_providerBox->blockSignals(false);
+    }
+    m_providerBox->setFixedWidth(96);
+    m_providerBox->setToolTip(QStringLiteral("切换模型厂商"));
+    connect(m_providerBox, &QComboBox::currentIndexChanged,
+            this, &MainWindow::onProviderSelected);
+    toolLayout->addWidget(m_providerBox);
+
     m_modelBox = new QComboBox(toolbar);
-    m_modelBox->addItems({QStringLiteral("qwen3.8-flash"),
-                          QStringLiteral("qwen3.8-max"),
-                          QStringLiteral("deepseek-v4.1-flash")});
+    refreshModelList();
     m_modelBox->setToolTip(QStringLiteral("模型选择（实时生效）"));
     m_modelBox->setFixedWidth(150);
     toolLayout->addWidget(m_modelBox);
@@ -430,6 +449,41 @@ void MainWindow::onSessionContextMenu(const QPoint &pos)
         }
         reloadSessionList();
     }
+}
+
+void MainWindow::refreshModelList()
+{
+    if (!m_modelBox)
+        return;
+    const QString current = m_modelBox->currentText();
+    const QStringList models =
+        ProviderRegistry::instance().models(ProviderRegistry::instance().currentId());
+
+    m_modelBox->blockSignals(true);
+    m_modelBox->clear();
+    m_modelBox->addItems(models);
+    const int keep = m_modelBox->findText(current);
+    if (keep >= 0)
+        m_modelBox->setCurrentIndex(keep);
+    m_modelBox->blockSignals(false);
+}
+
+void MainWindow::onProviderSelected(int index)
+{
+    if (index < 0)
+        return;
+    const QString id = m_providerBox->itemData(index).toString();
+    ProviderRegistry::instance().setCurrentId(id);
+
+    IModelProvider *p = ProviderRegistry::instance().current();
+    if (!p)
+        return;
+
+    m_provider = p;
+    if (m_agentLoop)
+        m_agentLoop->setProvider(p);
+    refreshModelList();
+    applyParamsFromSettings(); // 新厂商的 Key / 工具开关重新下发
 }
 
 void MainWindow::startRequest(const QList<Message> &history)

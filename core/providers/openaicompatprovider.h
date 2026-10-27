@@ -1,5 +1,5 @@
-#ifndef BAILIAN_BAILIANPROVIDER_H
-#define BAILIAN_BAILIANPROVIDER_H
+#ifndef EGENT_OPENAICOMPATPROVIDER_H
+#define EGENT_OPENAICOMPATPROVIDER_H
 
 #include "core/providers/imodelprovider.h"
 #include "core/sseparser.h"
@@ -11,16 +11,32 @@
 class QTimer;
 
 /**
- * 百炼 provider：实现 IModelProvider，调用百炼 OpenAI 兼容端点，
- * chat 走 SSE 流式（见企划书 8 / 8.1）。
+ * OpenAI 兼容协议的通用实现。
+ *
+ * 百炼、DeepSeek、OpenAI 三家的 chat 端点格式一致（都是 OpenAI 兼容），
+ * 差异只有「端点 + Key 来源 + 模型列表」，因此不必各写一份 provider，
+ * 用配置区分即可。新增厂商 = 加一份 Config，不动调用方（企划书决策 5）。
  */
-class BailianProvider : public IModelProvider
+class OpenAiCompatProvider : public IModelProvider
 {
     Q_OBJECT
 public:
-    explicit BailianProvider(QObject *parent = nullptr);
+    struct Config
+    {
+        QString id;            // "bailian" / "deepseek" / "openai"
+        QString displayName;   // 界面显示名
+        QUrl endpoint;
+        QString envVar;        // 环境变量名，优先级最高
+        QString settingsKey;   // QSettings 键名
+        QStringList models;    // 该厂商的模型列表
+    };
 
-    QString id() const override { return QStringLiteral("bailian"); }
+    explicit OpenAiCompatProvider(const Config &config, QObject *parent = nullptr);
+
+    const Config &config() const { return m_config; }
+    QStringList models() const { return m_config.models; }
+
+    QString id() const override { return m_config.id; }
     void send(const QList<Message> &history, const QString &model) override;
     void cancel() override;
     void setOption(const QString &key, const QVariant &value) override;
@@ -32,6 +48,7 @@ private slots:
     void onTimeout();
 
 private:
+    Config m_config;
     QNetworkAccessManager *m_nam = nullptr;
     QNetworkReply *m_reply = nullptr;
     QTimer *m_timeoutTimer = nullptr;
@@ -76,8 +93,11 @@ private:
     };
     QMap<int, PendingToolCall> m_pendingCalls;
 
-    QString apiKey() const;
-    static QUrl endpoint();
+    QString apiKey() const { return apiKeyFor(m_config); }
+
+public:
+    /** 读取指定厂商的 Key：环境变量优先，其次 QSettings */
+    static QString apiKeyFor(const Config &config);
 
     /** 把 HTTP 状态码 / 传输层错误翻译成用户能看懂的句子 */
     QString describeError() const;
@@ -85,4 +105,4 @@ private:
     static QString serverMessage(const QByteArray &body);
 };
 
-#endif // BAILIAN_BAILIANPROVIDER_H
+#endif // EGENT_OPENAICOMPATPROVIDER_H

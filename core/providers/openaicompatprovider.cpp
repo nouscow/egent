@@ -1,4 +1,4 @@
-#include "bailianprovider.h"
+#include "openaicompatprovider.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -11,8 +11,9 @@
 
 #include "core/tools/toolregistry.h"
 
-BailianProvider::BailianProvider(QObject *parent)
+OpenAiCompatProvider::OpenAiCompatProvider(const Config &config, QObject *parent)
     : IModelProvider(parent)
+    , m_config(config)
     , m_nam(new QNetworkAccessManager(this))
     , m_timeoutTimer(new QTimer(this))
 {
@@ -26,25 +27,21 @@ BailianProvider::BailianProvider(QObject *parent)
     }
 
     m_timeoutTimer->setSingleShot(true);
-    connect(m_timeoutTimer, &QTimer::timeout, this, &BailianProvider::onTimeout);
+    connect(m_timeoutTimer, &QTimer::timeout, this, &OpenAiCompatProvider::onTimeout);
 }
 
-QUrl BailianProvider::endpoint()
+QString OpenAiCompatProvider::apiKeyFor(const Config &config)
 {
-    return QUrl(QStringLiteral(
-        "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"));
+    if (!config.envVar.isEmpty()) {
+        const QByteArray env = qgetenv(config.envVar.toUtf8());
+        if (!env.isEmpty())
+            return QString::fromUtf8(env);
+    }
+    QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    return s.value(config.settingsKey).toString();
 }
 
-QString BailianProvider::apiKey() const
-{
-    QByteArray env = qgetenv("DASHSCOPE_API_KEY");
-    if (!env.isEmpty())
-        return QString::fromUtf8(env);
-    QSettings s;
-    return s.value(QStringLiteral("dashscope_api_key")).toString();
-}
-
-void BailianProvider::send(const QList<Message> &history, const QString &model)
+void OpenAiCompatProvider::send(const QList<Message> &history, const QString &model)
 {
     m_parser.reset();
     m_errored = false;
@@ -93,7 +90,7 @@ void BailianProvider::send(const QList<Message> &history, const QString &model)
     const QString key = apiKey();
     if (key.isEmpty()) {
         emit errorOccurred(QStringLiteral(
-            "未找到 API Key：请在设置里填写，或设置环境变量 DASHSCOPE_API_KEY。"));
+            "未找到 API Key：请在设置里填写，或设置对应的环境变量。"));
         return;
     }
 
@@ -103,7 +100,7 @@ void BailianProvider::send(const QList<Message> &history, const QString &model)
     postRaw(m_lastBody);
 }
 
-void BailianProvider::postRaw(const QByteArray &body)
+void OpenAiCompatProvider::postRaw(const QByteArray &body)
 {
     if (m_reply) {
         m_reply->disconnect(this);
@@ -116,20 +113,20 @@ void BailianProvider::postRaw(const QByteArray &body)
     m_errorBody.clear();
     m_pendingCalls.clear();
 
-    QNetworkRequest req(endpoint());
+    QNetworkRequest req(m_config.endpoint);
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     req.setRawHeader("Authorization", ("Bearer " + apiKey()).toUtf8());
 
     m_reply = m_nam->post(req, body);
-    connect(m_reply, &QNetworkReply::readyRead, this, &BailianProvider::onReadyRead);
-    connect(m_reply, &QNetworkReply::finished, this, &BailianProvider::onFinished);
-    connect(m_reply, &QNetworkReply::errorOccurred, this, &BailianProvider::onError);
+    connect(m_reply, &QNetworkReply::readyRead, this, &OpenAiCompatProvider::onReadyRead);
+    connect(m_reply, &QNetworkReply::finished, this, &OpenAiCompatProvider::onFinished);
+    connect(m_reply, &QNetworkReply::errorOccurred, this, &OpenAiCompatProvider::onError);
 
     if (m_timeoutMs > 0)
         m_timeoutTimer->start(m_timeoutMs);
 }
 
-bool BailianProvider::handleRateLimit()
+bool OpenAiCompatProvider::handleRateLimit()
 {
     if (!m_reply || m_cancelled)
         return false;
@@ -160,7 +157,7 @@ bool BailianProvider::handleRateLimit()
     return true;
 }
 
-void BailianProvider::onReadyRead()
+void OpenAiCompatProvider::onReadyRead()
 {
     if (!m_reply)
         return;
@@ -191,7 +188,7 @@ void BailianProvider::onReadyRead()
     }
 }
 
-void BailianProvider::cancel()
+void OpenAiCompatProvider::cancel()
 {
     if (!m_reply)
         return;
@@ -200,7 +197,7 @@ void BailianProvider::cancel()
     m_reply->abort(); // 会触发 errorOccurred(OperationCanceled)，由 onError 吞掉
 }
 
-void BailianProvider::onTimeout()
+void OpenAiCompatProvider::onTimeout()
 {
     if (!m_reply || m_reply->isFinished())
         return;
@@ -208,7 +205,7 @@ void BailianProvider::onTimeout()
     m_reply->abort(); // 同样落到 onError，靠 m_timedOut 区分文案
 }
 
-void BailianProvider::setOption(const QString &key, const QVariant &value)
+void OpenAiCompatProvider::setOption(const QString &key, const QVariant &value)
 {
     if (key == QLatin1String("enable_thinking"))
         m_enableThinking = value.toBool();
@@ -223,7 +220,7 @@ void BailianProvider::setOption(const QString &key, const QVariant &value)
     // 其余 key 静默忽略
 }
 
-QString BailianProvider::serverMessage(const QByteArray &body)
+QString OpenAiCompatProvider::serverMessage(const QByteArray &body)
 {
     if (body.isEmpty())
         return QString();
@@ -244,7 +241,7 @@ QString BailianProvider::serverMessage(const QByteArray &body)
     return root.value(QStringLiteral("message")).toString();
 }
 
-QString BailianProvider::describeError() const
+QString OpenAiCompatProvider::describeError() const
 {
     QNetworkReply *reply = m_reply;
 
@@ -298,7 +295,7 @@ QString BailianProvider::describeError() const
     return QStringLiteral("网络请求失败。");
 }
 
-void BailianProvider::onError(QNetworkReply::NetworkError /*code*/)
+void OpenAiCompatProvider::onError(QNetworkReply::NetworkError /*code*/)
 {
     if (m_cancelled)
         return; // 用户主动中止，不算错误
@@ -311,7 +308,7 @@ void BailianProvider::onError(QNetworkReply::NetworkError /*code*/)
     emit errorOccurred(describeError());
 }
 
-void BailianProvider::onFinished()
+void OpenAiCompatProvider::onFinished()
 {
     if (!m_reply)
         return;

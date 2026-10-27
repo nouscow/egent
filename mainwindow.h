@@ -43,6 +43,7 @@ private slots:
     void onThemeSelected(int index);
     void onSendClicked();
     void openSettings();
+    void onProviderSelected(int index);
     void onCopyMessage(const QString &text);
     void onToolStarted(const QString &name, const QString &argsJson);
     void onToolFinished(const QString &name, bool ok, const QString &result);
@@ -63,6 +64,8 @@ private:
     void renderChat();
     /** 把设置里的采样参数 / 超时下发给 provider */
     void applyParamsFromSettings();
+    /** 按当前厂商刷新模型下拉 */
+    void refreshModelList();
     /** 真正发起请求（发送与重新生成共用） */
     void startRequest(const QList<Message> &history);
 
@@ -85,6 +88,7 @@ private:
     bool m_commandApprovedOnce = false;
     QPlainTextEdit *m_input = nullptr;
     QComboBox *m_themeBox = nullptr;
+    QComboBox *m_providerBox = nullptr;
     QComboBox *m_modelBox = nullptr;
     QPushButton *m_sendBtn = nullptr;
     QCheckBox *m_thinkingBox = nullptr;

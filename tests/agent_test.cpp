@@ -2,7 +2,8 @@
 // 需要 DASHSCOPE_API_KEY。退出码 0 = 通过。
 
 #include "core/agentloop.h"
-#include "core/providers/bailianprovider.h"
+#include "core/providers/openaicompatprovider.h"
+#include "core/providers/providerregistry.h"
 #include "core/tools/pathguard.h"
 #include "core/tools/toolregistry.h"
 
@@ -54,7 +55,7 @@ int main(int argc, char *argv[])
     PathGuard::instance().setWorkspace(tmp.path());
     ToolRegistry::instance().registerDefaults();
 
-    BailianProvider provider;
+    OpenAiCompatProvider provider(ProviderRegistry::bailianConfig());
     provider.setOption(QStringLiteral("tools_enabled"), true);
     provider.setOption(QStringLiteral("enable_thinking"), false);
 
