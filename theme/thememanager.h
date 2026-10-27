@@ -38,6 +38,13 @@ public:
     /** 主动切换主题；失败（id 不存在）时保持原样并返回 false。 */
     bool applyTheme(const QString &id);
 
+    /**
+     * 设置正文字号（px）；传 0 表示跟随主题默认。
+     * 标题与辅助文字会按 ±1 自动跟随，保持原有层级关系。
+     */
+    void setFontSize(int px);
+    int fontSize() const { return m_fontSize; }
+
     void setFollowSystem(bool on);
     bool followSystem() const { return m_followSystem; }
 
@@ -64,6 +71,7 @@ private:
     ThemeRepository m_repo;
     QString m_template;
     QString m_currentId;
+    int m_fontSize = 0;
     bool m_followSystem = true;
     bool m_initialized = false;
 };

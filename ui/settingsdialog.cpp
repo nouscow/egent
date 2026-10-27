@@ -130,6 +130,14 @@ void SettingsDialog::buildUi()
                        "每次写入都会展示完整内容让你确认，且不能删除文件。"));
     form->addRow(QStringLiteral("文件写入"), m_writeEnabled);
 
+    m_fontSize = new QComboBox(this);
+    m_fontSize->addItem(QStringLiteral("小"), 13);
+    m_fontSize->addItem(QStringLiteral("标准"), 14);
+    m_fontSize->addItem(QStringLiteral("大"), 16);
+    m_fontSize->addItem(QStringLiteral("特大"), 18);
+    m_fontSize->setToolTip(QStringLiteral("调整界面正文字号，标题与小字会同步跟随"));
+    form->addRow(QStringLiteral("界面字号"), m_fontSize);
+
     root->addLayout(form);
 
     auto *hint = new QLabel(
@@ -179,6 +187,10 @@ void SettingsDialog::loadFromSettings()
         m_apiKey->setPlaceholderText(QStringLiteral("未设置，请填写"));
 
     m_writeEnabled->setChecked(s.value(QStringLiteral("agent/write_enabled"), false).toBool());
+
+    const int fs = s.value(QStringLiteral("ui/font_size"), 14).toInt();
+    const int fi = m_fontSize->findData(fs);
+    m_fontSize->setCurrentIndex(fi >= 0 ? fi : 1);
     m_agentEnabled->setChecked(s.value(QStringLiteral("agent/enabled"), false).toBool());
     m_workspace->setText(s.value(QStringLiteral("agent/workspace")).toString());
     const QString policy = s.value(QStringLiteral("agent/command_policy"),
@@ -203,6 +215,7 @@ void SettingsDialog::saveToSettings()
     s.setValue(QStringLiteral("agent/workspace"), m_workspace->text().trimmed());
     s.setValue(QStringLiteral("agent/command_policy"), m_commandPolicy->currentData().toString());
     s.setValue(QStringLiteral("agent/write_enabled"), m_writeEnabled->isChecked());
+    s.setValue(QStringLiteral("ui/font_size"), m_fontSize->currentData().toInt());
 }
 
 double SettingsDialog::temperature() const
@@ -243,4 +256,9 @@ QString SettingsDialog::apiKey() const
 bool SettingsDialog::writeEnabled() const
 {
     return m_writeEnabled->isChecked();
+}
+
+int SettingsDialog::fontSize() const
+{
+    return m_fontSize->currentData().toInt();
 }

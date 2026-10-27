@@ -43,6 +43,8 @@ signals:
     void copyRequested(const QString &text);
     /** 第 index 条（助手）消息被要求重新生成 */
     void regenerateRequested(int index);
+    /** 第 index 条（用户）消息被要求编辑后重发 */
+    void editRequested(int index);
 
 private:
     void scrollToBottom();

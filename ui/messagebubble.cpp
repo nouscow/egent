@@ -148,6 +148,12 @@ void MessageBubble::showContextMenu(const QPoint &globalPos)
         connect(regenAct, &QAction::triggered, this, [this]() {
             emit regenerateRequested();
         });
+    } else if (m_role == Role::User) {
+        menu.addSeparator();
+        QAction *editAct = menu.addAction(QStringLiteral("编辑后重发"));
+        connect(editAct, &QAction::triggered, this, [this]() {
+            emit editRequested();
+        });
     }
 
     menu.exec(globalPos);

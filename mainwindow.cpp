@@ -65,6 +65,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_chatView, &ChatView::copyRequested, this, &MainWindow::onCopyMessage);
     connect(m_chatView, &ChatView::regenerateRequested,
             this, &MainWindow::onRegenerateMessage);
+    connect(m_chatView, &ChatView::editRequested,
+            this, &MainWindow::onEditMessage);
 
     // ---- 真实流式接口 + Agent 循环 ----
     // 界面不再直连 provider：所有请求都经过 AgentLoop，
@@ -99,6 +101,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_streamTimer, &QTimer::timeout, this, &MainWindow::flushStream);
 
     applyParamsFromSettings();
+
+    // 启动时应用上次保存的字号
+    {
+        QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+        ThemeManager::instance().setFontSize(
+            s.value(QStringLiteral("ui/font_size"), 0).toInt());
+    }
 
     // ---- M3：打开本地会话库，载入最近一次会话（没有就新建） ----
     if (!m_store.open()) {
@@ -154,7 +163,7 @@ void MainWindow::buildUi()
     // 文档要求左栏底部展示额度，接口尚未接入，先占位
     // 额度查询已实测不可行（需阿里云 RAM AccessKey + BSS OpenAPI，
     // DashScope API Key 无权访问），此处如实标注而非画饼
-    auto *quota = new QLabel(QStringLiteral("额度查询 · 需阿里云 AccessKey"), sidebar);
+    auto *quota = new QLabel(QStringLiteral("额度 · 需 AccessKey"), sidebar);
     quota->setObjectName(QStringLiteral("quotaLabel"));
     quota->setToolTip(QStringLiteral(
         "百炼未提供用 DashScope API Key 查询免费额度的接口。\n"
@@ -194,7 +203,8 @@ void MainWindow::buildUi()
         m_providerBox->setCurrentIndex(idx >= 0 ? idx : 0);
         m_providerBox->blockSignals(false);
     }
-    m_providerBox->setFixedWidth(96);
+    m_providerBox->setMinimumWidth(88);
+    m_providerBox->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     m_providerBox->setToolTip(QStringLiteral("切换模型厂商"));
     connect(m_providerBox, &QComboBox::currentIndexChanged,
             this, &MainWindow::onProviderSelected);
@@ -203,7 +213,8 @@ void MainWindow::buildUi()
     m_modelBox = new QComboBox(toolbar);
     refreshModelList();
     m_modelBox->setToolTip(QStringLiteral("模型选择（实时生效）"));
-    m_modelBox->setFixedWidth(150);
+    m_modelBox->setMinimumWidth(150);
+    m_modelBox->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     toolLayout->addWidget(m_modelBox);
 
     m_themeBox = new QComboBox(toolbar);
@@ -217,7 +228,8 @@ void MainWindow::buildUi()
         m_themeBox->setCurrentIndex(current);
         m_themeBox->blockSignals(false);
     }
-    m_themeBox->setFixedWidth(96);
+    m_themeBox->setMinimumWidth(80);
+    m_themeBox->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     m_themeBox->setToolTip(QStringLiteral("切换主题（运行时即时生效）"));
     connect(m_themeBox, &QComboBox::currentIndexChanged,
             this, &MainWindow::onThemeSelected);
@@ -598,6 +610,58 @@ void MainWindow::onCopyMessage(const QString &text)
     QApplication::clipboard()->setText(text);
 }
 
+void MainWindow::onEditMessage(int index)
+{
+    if (!m_provider || m_streamingMsgIndex >= 0)
+        return;
+    if (index < 0 || index >= m_messages.size())
+        return;
+    if (m_messages.at(index).first != QLatin1String("user"))
+        return;
+
+    bool ok = false;
+    const QString edited = QInputDialog::getMultiLineText(
+        this, QStringLiteral("编辑后重发"),
+        QStringLiteral("修改后将从这里重新发送，该消息之后的对话会被丢弃："),
+        m_messages.at(index).second, &ok);
+    if (!ok || edited.trimmed().isEmpty())
+        return;
+
+    const QString newText = edited.trimmed();
+
+    // 气泡列表里混着工具卡片，而库里只存 user/assistant，
+    // 所以要用「排除 tool 后的序号」去定位数据库行，不能直接用 UI 索引。
+    int dbIndex = 0;
+    for (int i = 0; i < index; ++i) {
+        if (m_messages.at(i).first != QLatin1String("tool"))
+            ++dbIndex;
+    }
+
+    m_messages.resize(index + 1);
+    m_messages[index].second = newText;
+
+    if (m_store.isOpen() && m_currentSessionId > 0) {
+        m_store.updateMessageAt(m_currentSessionId, dbIndex, newText);
+        m_store.truncateAfter(m_currentSessionId, dbIndex + 1);
+    }
+
+    m_chatView->rebuild(m_messages);
+
+    QList<Message> history;
+    for (int i = 0; i <= index; ++i) {
+        if (m_messages.at(i).first == QLatin1String("tool"))
+            continue;
+        history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second});
+    }
+
+    m_messages.append({QStringLiteral("assistant"), QString()});
+    m_streamingMsgIndex = m_messages.size() - 1;
+    m_streamBuf.clear();
+    m_chatView->appendMessage(QStringLiteral("assistant"), QString());
+
+    startRequest(history);
+}
+
 void MainWindow::onRegenerateMessage(int index)
 {
     if (!m_provider || m_streamingMsgIndex >= 0)
@@ -644,6 +708,13 @@ void MainWindow::openSettings()
     if (dlg.exec() != QDialog::Accepted)
         return;
     applyParamsFromSettings();
+
+    // 启动时应用上次保存的字号
+    {
+        QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+        ThemeManager::instance().setFontSize(
+            s.value(QStringLiteral("ui/font_size"), 0).toInt());
+    }
 
     // ---- M3：打开本地会话库，载入最近一次会话（没有就新建） ----
     if (!m_store.open()) {

@@ -14,7 +14,7 @@
 /* ---------- 基础 ---------- */
 QWidget {
     color: {{text.primary}};
-    font-size: 14px;
+    font-size: {{font.size}}px;
 }
 
 QMainWindow,
@@ -97,7 +97,7 @@ QWidget#toolbar {
 }
 
 QLabel#toolbarTitle {
-    font-size: 15px;
+    font-size: {{font.size.title}}px;
     font-weight: 600;
     color: {{text.primary}};
 }
@@ -327,7 +327,7 @@ QWidget[role="toolBubble"] {
     border: 1px dashed {{border.default}};
     border-radius: 10px;
     padding: 9px 13px;
-    font-size: 13px;
+    font-size: {{font.size.small}}px;
 }
 
 /* 头像由 AvatarWidget 自绘：
@@ -385,13 +385,13 @@ QToolTip {
 /* ---------- 左栏额度占位 ---------- */
 QLabel#quotaLabel {
     color: {{text.placeholder}};
-    font-size: 12px;
+    font-size: {{font.size.small}}px;
     padding: 6px 4px 2px 4px;
 }
 
 /* ---------- 对话区空状态 ---------- */
 QLabel#emptyHint {
     color: {{text.placeholder}};
-    font-size: 13px;
+    font-size: {{font.size.small}}px;
     line-height: 22px;
 }

@@ -49,6 +49,7 @@ private slots:
     void onToolFinished(const QString &name, bool ok, const QString &result);
     void onPermissionRequired(const QString &toolName, const QString &detail);
     void onRegenerateMessage(int index);
+    void onEditMessage(int index);
     void onNewSession();
     void onSessionActivated(QListWidgetItem *item);
     void onSessionContextMenu(const QPoint &pos);

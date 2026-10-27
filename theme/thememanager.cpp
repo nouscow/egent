@@ -100,6 +100,15 @@ void ThemeManager::onSystemColorSchemeChanged()
         applyTheme(id);
 }
 
+void ThemeManager::setFontSize(int px)
+{
+    if (m_fontSize == px)
+        return;
+    m_fontSize = qBound(0, px, 24);
+    applyResolvedTheme();
+    emit themeChanged(m_currentId);
+}
+
 bool ThemeManager::applyTheme(const QString &id)
 {
     const ThemeData *data = m_repo.find(id);
@@ -158,7 +167,19 @@ void ThemeManager::applyResolvedTheme()
         return;
 
     const auto result = QssTemplate::render(
-        m_template, [data](const QString &name) { return data->token(name); });
+        m_template, [this, data](const QString &name) {
+            // 字号覆盖：用户选了字号就压过主题默认值，标题/小字按 ±1 跟随，
+            // 避免调大后标题反而比正文小
+            if (m_fontSize > 0) {
+                if (name == QLatin1String("font.size"))
+                    return QString::number(m_fontSize);
+                if (name == QLatin1String("font.size.title"))
+                    return QString::number(m_fontSize + 1);
+                if (name == QLatin1String("font.size.small"))
+                    return QString::number(m_fontSize - 1);
+            }
+            return data->token(name);
+        });
 
     if (result.hasUnknown()) {
         qWarning().noquote() << QStringLiteral("[theme] 主题 %1 有未定义令牌: %2")

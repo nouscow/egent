@@ -78,6 +78,9 @@ MessageBubble *ChatView::insertMessage(int index, const QString &role, const QSt
     connect(bubble, &MessageBubble::regenerateRequested, this, [this, bubble]() {
         emit regenerateRequested(m_bubbles.indexOf(bubble));
     });
+    connect(bubble, &MessageBubble::editRequested, this, [this, bubble]() {
+        emit editRequested(m_bubbles.indexOf(bubble));
+    });
 
     updateEmptyHint();
     scrollToBottom();

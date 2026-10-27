@@ -50,6 +50,9 @@
     "avatar.border": "border.default",
     "input.bg": "bg.input",
     "input.border": "border.default",
-    "toolbar.bg": "bg.surface"
+    "toolbar.bg": "bg.surface",
+    "font.size": "14",
+    "font.size.title": "15",
+    "font.size.small": "13"
   }
 }

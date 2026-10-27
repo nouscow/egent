@@ -280,3 +280,43 @@ bool SessionStore::dropLastMessage(int sessionId)
     q.addBindValue(sessionId);
     return q.exec();
 }
+
+bool SessionStore::truncateAfter(int sessionId, int keepCount)
+{
+    if (!m_open)
+        return false;
+    if (keepCount < 0)
+        keepCount = 0;
+
+    QSqlDatabase db = QSqlDatabase::database(QLatin1String(kConnection));
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "DELETE FROM message WHERE session_id = ? AND id NOT IN ("
+        "  SELECT id FROM message WHERE session_id = ? ORDER BY id LIMIT ?)"));
+    q.addBindValue(sessionId);
+    q.addBindValue(sessionId);
+    q.addBindValue(keepCount);
+    const bool ok = q.exec();
+    if (ok)
+        touchSession(sessionId);
+    return ok;
+}
+
+bool SessionStore::updateMessageAt(int sessionId, int index, const QString &content)
+{
+    if (!m_open || index < 0)
+        return false;
+
+    QSqlDatabase db = QSqlDatabase::database(QLatin1String(kConnection));
+    QSqlQuery q(db);
+    q.prepare(QStringLiteral(
+        "UPDATE message SET content = ? WHERE id = ("
+        "  SELECT id FROM message WHERE session_id = ? ORDER BY id LIMIT 1 OFFSET ?)"));
+    q.addBindValue(content);
+    q.addBindValue(sessionId);
+    q.addBindValue(index);
+    const bool ok = q.exec();
+    if (ok)
+        touchSession(sessionId);
+    return ok;
+}

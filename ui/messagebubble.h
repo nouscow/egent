@@ -33,6 +33,8 @@ public:
 signals:
     void copyRequested(const QString &text);
     void regenerateRequested();
+    /** 用户消息被要求「编辑后重发」 */
+    void editRequested();
 
 protected:
     void contextMenuEvent(QContextMenuEvent *event) override;

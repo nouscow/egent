@@ -41,6 +41,8 @@ public:
     QString apiKey() const;
     /** 是否允许模型写文件（L4，默认关闭） */
     bool writeEnabled() const;
+    /** 正文字号（px），0 表示跟随主题默认 */
+    int fontSize() const;
 
 private:
     void buildUi();
@@ -54,4 +56,5 @@ private:
     QLineEdit *m_apiKey = nullptr;
     class QLabel *m_apiKeyLabel = nullptr;
     QCheckBox *m_writeEnabled = nullptr;
+    QComboBox *m_fontSize = nullptr;
 };

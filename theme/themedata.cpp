@@ -9,12 +9,28 @@
 
 namespace {
 
-/** 形如 #rgb / #rrggbb / #aarrggbb / rgb() / rgba() / hsl() / transparent 视为字面色值 */
+/**
+ * 判断令牌值是否为字面量（是则直接返回，不再当引用递归解析）。
+ *
+ * 除了各种颜色写法，# 开头还包含一档：**纯数字**。
+ * 加字号令牌时踩过坑——"14" 不是颜色，被当成令牌名去查，
+ * 查不到就报「缺失令牌: 14」。
+ */
 bool looksLikeLiteralColor(const QString &v)
 {
     const QString s = v.trimmed().toLower();
     if (s.isEmpty())
         return false;
+
+    bool numeric = false;
+    s.toInt(&numeric);
+    if (numeric)
+        return true; // 字号之类的非颜色令牌
+
+    if (s.startsWith(QLatin1Char('#')))
+        return true;
+    if (s.startsWith(QLatin1String("#")))
+        return true;
     if (s.startsWith(QLatin1Char('#')))
         return true;
     if (s == QLatin1String("transparent"))

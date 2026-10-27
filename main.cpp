@@ -58,6 +58,13 @@ int main(int argc, char *argv[])
         st.setValue(QStringLiteral("agent/workspace"), ws);
         st.setValue(QStringLiteral("agent/enabled"), !ws.isEmpty());
     }
+    // 调试用：--font-size <px>
+    const int fsIdx = args.indexOf(QStringLiteral("--font-size"));
+    if (fsIdx > 0 && fsIdx + 1 < args.size()) {
+        QSettings st(QStringLiteral("egent"), QStringLiteral("egent"));
+        st.setValue(QStringLiteral("ui/font_size"), args.at(fsIdx + 1).toInt());
+    }
+
     // 调试用：--cmd-policy <off|always|session|never>
     const int cpIdx = args.indexOf(QStringLiteral("--cmd-policy"));
     if (cpIdx > 0 && cpIdx + 1 < args.size()) {

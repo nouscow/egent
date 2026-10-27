@@ -53,6 +53,10 @@ public:
     bool updateLastAssistant(int sessionId, const QString &content);
     /** 删除会话里最后一条消息（重新生成时用） */
     bool dropLastMessage(int sessionId);
+    /** 只保留前 keepCount 条消息（编辑重发时用） */
+    bool truncateAfter(int sessionId, int keepCount);
+    /** 更新第 index 条（0 基）消息的内容 */
+    bool updateMessageAt(int sessionId, int index, const QString &content);
 
     static QString defaultDbPath();
 
