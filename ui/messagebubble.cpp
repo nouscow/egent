@@ -7,6 +7,9 @@
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QMenu>
+#include <QTextDocument>
+
+#include "theme/thememanager.h"
 #include <QLabel>
 
 namespace {
@@ -88,7 +91,15 @@ void MessageBubble::buildUi(const QString &text)
 
 void MessageBubble::setText(const QString &text)
 {
-    m_bubble->setText(text);
+    // 助手的回答按 Markdown 渲染；用户输入与工具卡片保持纯文本，
+    // 避免把用户随手打的符号当成语法。
+    if (m_role == Role::Assistant && !text.isEmpty()) {
+        m_bubble->setTextFormat(Qt::RichText);
+        m_bubble->setText(renderMarkdown(text));
+    } else {
+        m_bubble->setTextFormat(Qt::PlainText);
+        m_bubble->setText(text);
+    }
 
     // 工具卡片占满整行，不需要按内容算宽度
     if (m_role == Role::Tool)
@@ -140,4 +151,42 @@ void MessageBubble::showContextMenu(const QPoint &globalPos)
     }
 
     menu.exec(globalPos);
+}
+
+QString MessageBubble::renderMarkdown(const QString &markdown)
+{
+    // Qt 6 自带 Markdown 解析（底层 md4c，默认 GitHub 方言），
+    // 表格/代码块/加粗都支持，因此不需要引入第三方库。
+    QTextDocument doc;
+    doc.setMarkdown(markdown, QTextDocument::MarkdownDialectGitHub);
+    QString html = doc.toHtml();
+
+    // Qt 生成的 HTML 自带一套浅色默认样式，在深色主题下会黑字黑底。
+    // 这里追加一段样式覆盖它（后定义的规则优先级更高）。
+    const ThemeManager &tm = ThemeManager::instance();
+    const QString text = tm.token(QStringLiteral("chat.assistantBubble.text"));
+    const QString border = tm.token(QStringLiteral("border.default"));
+    const QString codeBg = tm.token(QStringLiteral("bg.window"));
+    const QString accent = tm.token(QStringLiteral("accent"));
+
+    const QString css = QStringLiteral(
+        "<style>"
+        "body { color: %1; }"
+        "td, th { border: 1px solid %2; padding: 4px 8px; }"
+        "table { border-collapse: collapse; margin: 6px 0; }"
+        "th { background: %3; }"
+        "pre { background: %4; padding: 8px; border-radius: 6px; }"
+        "code { background: %4; }"
+        "a { color: %5; }"
+        "hr { border: none; border-top: 1px solid %2; }"
+        "</style>")
+        .arg(text, border, codeBg, codeBg, accent);
+
+    const int headEnd = html.indexOf(QStringLiteral("</head>"));
+    if (headEnd >= 0)
+        html.insert(headEnd, css);
+    else
+        html.prepend(css);
+
+    return html;
 }

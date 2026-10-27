@@ -39,6 +39,8 @@ protected:
 
 private:
     void buildUi(const QString &text);
+    /** 把 Markdown 转成带主题色的 HTML */
+    static QString renderMarkdown(const QString &markdown);
     void showContextMenu(const QPoint &globalPos);
 
     Role m_role = Role::Assistant;
