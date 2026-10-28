@@ -23,13 +23,16 @@ public:
     explicit ChatView(QWidget *parent = nullptr);
 
     /** 按消息列表整体重建（切换主题时用，保证旧消息也换色） */
-    void rebuild(const QList<QPair<QString, QString>> &messages);
+    void rebuild(const QList<QPair<QString, QString>> &messages,
+                 const QList<QString> &images = QList<QString>());
 
     /** 追加一条消息，返回其指针，便于随后流式更新 */
-    MessageBubble *appendMessage(const QString &role, const QString &text);
+    MessageBubble *appendMessage(const QString &role, const QString &text,
+                                 const QString &imagePath = QString());
 
     /** 在指定位置插入（工具卡片要插在正在生成的回答之前） */
-    MessageBubble *insertMessage(int index, const QString &role, const QString &text);
+    MessageBubble *insertMessage(int index, const QString &role, const QString &text,
+                                 const QString &imagePath = QString());
 
     /** 更新最后一条消息的内容（流式用） */
     void updateLastText(const QString &text);

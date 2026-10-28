@@ -5,6 +5,7 @@
 class AvatarWidget;
 class QContextMenuEvent;
 class QLabel;
+class QVBoxLayout;
 
 /**
  * 一条消息 = 头像 + 气泡。
@@ -23,10 +24,13 @@ class MessageBubble : public QWidget
 public:
     enum class Role { User, Assistant, Tool };
 
-    MessageBubble(Role role, const QString &text, QWidget *parent = nullptr);
+    MessageBubble(Role role, const QString &text, QWidget *parent = nullptr,
+                  const QString &imagePath = QString());
 
     void setText(const QString &text);
     QString text() const;
+    /** 设置图片附件路径（空串为无图），显示缩略图，点击可打开原图 */
+    void setImagePath(const QString &path);
 
     /** 导出为 HTML 时复用：把单条消息渲染成自包含 HTML 片段（P2.3） */
     static QString markdownCss();
@@ -43,6 +47,7 @@ signals:
 
 protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
     void buildUi(const QString &text);
@@ -53,4 +58,10 @@ private:
     Role m_role = Role::Assistant;
     AvatarWidget *m_avatar = nullptr;
     QLabel *m_bubble = nullptr;
+    /** 文本气泡容器（内部垂直排布文本 + 图片附件） */
+    QWidget *m_bubbleBox = nullptr;
+    QVBoxLayout *m_contentLayout = nullptr;
+    QLabel *m_imageLabel = nullptr;
+    QString m_imagePath;
+    static constexpr int kImageMaxWidth = 320;
 };

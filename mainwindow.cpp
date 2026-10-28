@@ -39,6 +39,8 @@
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
+#include <QStandardPaths>
+#include <QToolButton>
 #include <QIcon>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -307,6 +309,27 @@ void MainWindow::buildUi()
     m_input->setFixedHeight(78);
     inputLayout->addWidget(m_input, 1);
 
+    // 图片选择按钮 + 已附加图片的缩略预览（点击预览移除）
+    m_imageBtn = new QPushButton(inputWrap);
+    m_imageBtn->setObjectName(QStringLiteral("imageButton"));
+    m_imageBtn->setIcon(QIcon(QStringLiteral(":/icons/image.svg")));
+    m_imageBtn->setIconSize(QSize(17, 17));
+    m_imageBtn->setFixedSize(40, 40);
+    m_imageBtn->setToolTip(QStringLiteral("发送图片"));
+    m_imageBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_imageBtn, &QPushButton::clicked, this, &MainWindow::onPickImage);
+    inputLayout->addWidget(m_imageBtn, 0, Qt::AlignBottom);
+
+    m_imagePreview = new QToolButton(inputWrap);
+    m_imagePreview->setObjectName(QStringLiteral("imagePreview"));
+    m_imagePreview->setFixedSize(40, 40);
+    m_imagePreview->setIconSize(QSize(36, 36));
+    m_imagePreview->setToolTip(QStringLiteral("已附加图片，点击移除"));
+    m_imagePreview->setCursor(Qt::PointingHandCursor);
+    m_imagePreview->hide();
+    connect(m_imagePreview, &QToolButton::clicked, this, &MainWindow::onClearImage);
+    inputLayout->addWidget(m_imagePreview, 0, Qt::AlignBottom);
+
     m_sendBtn = new QPushButton(QStringLiteral("发送"), inputWrap);
     m_sendBtn->setObjectName(QStringLiteral("sendButton"));
     m_sendBtn->setIcon(QIcon(QStringLiteral(":/icons/send.svg")));
@@ -482,16 +505,19 @@ void MainWindow::loadSession(int sessionId)
 
     m_currentSessionId = sessionId;
     m_messages.clear();
+    m_messageImages.clear();
     m_streamingMsgIndex = -1;
     m_streamBuf.clear();
 
     if (m_store.isOpen()) {
-        for (const Message &m : m_store.messages(sessionId))
+        for (const Message &m : m_store.messages(sessionId)) {
             m_messages.append({roleToStr(m.role), m.content});
+            m_messageImages.append(m.imagePath);
+        }
     }
 
     if (m_chatView)
-        m_chatView->rebuild(m_messages);
+        m_chatView->rebuild(m_messages, m_messageImages);
 
     if (m_sessionList) {
         for (int i = 0; i < m_sessionList->count(); ++i) {
@@ -667,6 +693,7 @@ void MainWindow::onToolStarted(const QString &name, const QString &argsJson)
 
     int at = (m_streamingMsgIndex >= 0) ? m_streamingMsgIndex : m_messages.size();
     m_messages.insert(at, {QStringLiteral("tool"), text});
+    m_messageImages.insert(at, QString());
     m_chatView->insertMessage(at, QStringLiteral("tool"), text);
 
     // 助手气泡被推到后面一位，流式刷新的索引要跟着走
@@ -749,6 +776,54 @@ void MainWindow::onToolFinished(const QString &name, bool ok, const QString &res
     m_chatView->updateTextAt(idx, text);
 }
 
+void MainWindow::onPickImage()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this, QStringLiteral("选择图片"),
+        QStandardPaths::writableLocation(QStandardPaths::PicturesLocation),
+        QStringLiteral("图片 (*.png *.jpg *.jpeg *.bmp *.webp *.gif)"));
+    if (path.isEmpty())
+        return;
+
+    m_pendingImage = path;
+    m_pendingImageMime = guessImageMime(path);
+    updateImagePreview();
+}
+
+void MainWindow::onClearImage()
+{
+    m_pendingImage.clear();
+    m_pendingImageMime.clear();
+    updateImagePreview();
+}
+
+void MainWindow::updateImagePreview()
+{
+    if (!m_imagePreview)
+        return;
+
+    if (m_pendingImage.isEmpty()) {
+        m_imagePreview->hide();
+        return;
+    }
+
+    m_imagePreview->setIcon(QIcon(m_pendingImage));
+    m_imagePreview->setToolTip(QStringLiteral("已附加图片（点击移除）：\n%1").arg(m_pendingImage));
+    m_imagePreview->show();
+}
+
+QString MainWindow::guessImageMime(const QString &path)
+{
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix == QLatin1String("jpg") || suffix == QLatin1String("jpeg"))
+        return QStringLiteral("image/jpeg");
+    if (suffix == QLatin1String("bmp"))
+        return QStringLiteral("image/bmp");
+    if (suffix == QLatin1String("webp"))
+        return QStringLiteral("image/webp");
+    return QStringLiteral("image/png");
+}
+
 void MainWindow::onCopyMessage(const QString &text)
 {
     QApplication::clipboard()->setText(text);
@@ -782,6 +857,7 @@ void MainWindow::onEditMessage(int index)
     }
 
     m_messages.resize(index + 1);
+    m_messageImages.resize(index + 1);
     m_messages[index].second = newText;
 
     if (m_store.isOpen() && m_currentSessionId > 0) {
@@ -789,16 +865,18 @@ void MainWindow::onEditMessage(int index)
         m_store.truncateAfter(m_currentSessionId, dbIndex + 1);
     }
 
-    m_chatView->rebuild(m_messages);
+    m_chatView->rebuild(m_messages, m_messageImages);
 
     QList<Message> history;
     for (int i = 0; i <= index; ++i) {
         if (m_messages.at(i).first == QLatin1String("tool"))
             continue;
-        history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second});
+        history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second,
+                        m_messageImages.at(i), QString()});
     }
 
     m_messages.append({QStringLiteral("assistant"), QString()});
+    m_messageImages.append(QString());
     m_streamingMsgIndex = m_messages.size() - 1;
     m_streamBuf.clear();
     m_chatView->appendMessage(QStringLiteral("assistant"), QString());
@@ -831,14 +909,17 @@ void MainWindow::onRegenerateMessage(int index)
 
     // 截断到该提问为止，后面的回答（可能有多条）全部丢掉
     m_messages.resize(userIdx + 1);
-    m_chatView->rebuild(m_messages);
+    m_messageImages.resize(userIdx + 1);
+    m_chatView->rebuild(m_messages, m_messageImages);
 
     QList<Message> history;
     for (int i = 0; i <= userIdx; ++i)
-        history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second});
+        history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second,
+                        m_messageImages.at(i), QString()});
 
     // 重新挂一个空的助手气泡，等流式填充
     m_messages.append({QStringLiteral("assistant"), QString()});
+    m_messageImages.append(QString());
     m_streamingMsgIndex = m_messages.size() - 1;
     m_streamBuf.clear();
     m_chatView->appendMessage(QStringLiteral("assistant"), QString());
@@ -1094,13 +1175,15 @@ void MainWindow::onSendClicked()
     }
 
     const QString text = m_input->toPlainText().trimmed();
-    if (text.isEmpty())
+    if (text.isEmpty() && m_pendingImage.isEmpty())
         return;
     if (!m_provider)
         return;
 
     m_messages.append({QStringLiteral("user"), text});
+    m_messageImages.append(m_pendingImage);
     m_messages.append({QStringLiteral("assistant"), QString()});
+    m_messageImages.append(QString());
     m_streamingMsgIndex = m_messages.size() - 1;
     m_streamBuf.clear();
     m_input->clear();
@@ -1112,23 +1195,33 @@ void MainWindow::onSendClicked()
         // 工具卡片只是给人看的，模型上下文里的 tool 消息由 AgentLoop 自己管
         if (m_messages.at(i).first == QLatin1String("tool"))
             continue;
-        history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second});
+        history.append({roleFromStr(m_messages.at(i).first), m_messages.at(i).second,
+                        m_messageImages.at(i), QString()});
     }
 
     // ---- 落库：先确保有会话，再写入这条提问 ----
     const int sid = ensureSession();
     if (m_store.isOpen() && sid > 0) {
         const int before = m_store.messages(sid).size();
-        m_store.appendMessage(sid, Role::User, text);
+        m_store.appendMessage(sid, Role::User, text, m_pendingImage, m_pendingImageMime);
         // 新会话的第一条消息顺手当标题
-        if (before == 0)
-            m_store.renameSession(sid, text.left(20));
+        if (before == 0) {
+            const QString title = text.isEmpty()
+                ? QStringLiteral("[图片]")
+                : text.left(20);
+            m_store.renameSession(sid, title);
+        }
         reloadSessionList();
     }
 
     // 增量追加，不整体重建：流式期间只更新最后一个气泡
-    m_chatView->appendMessage(QStringLiteral("user"), text);
+    m_chatView->appendMessage(QStringLiteral("user"), text, m_pendingImage);
     m_chatView->appendMessage(QStringLiteral("assistant"), QString());
+
+    // 已发出的附件从输入区移除，留出下一次附加的位置
+    m_pendingImage.clear();
+    m_pendingImageMime.clear();
+    updateImagePreview();
 
     startRequest(history);
 }
@@ -1259,5 +1352,5 @@ void MainWindow::renderChat()
 {
     // 气泡与头像的颜色全部由 QSS 动态属性控制，
     // 主题切换时整体重建一次，历史消息就会一起换色。
-    m_chatView->rebuild(m_messages);
+    m_chatView->rebuild(m_messages, m_messageImages);
 }

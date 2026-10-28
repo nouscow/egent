@@ -88,6 +88,7 @@ qt_add_resources(egent "theme_assets"
         resources/icons/send.svg
         resources/icons/stop.svg
         resources/icons/settings.svg
+        resources/icons/image.svg
 )
 
 qt_add_translations(

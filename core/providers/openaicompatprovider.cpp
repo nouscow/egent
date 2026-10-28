@@ -1,6 +1,7 @@
 #include "openaicompatprovider.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -12,6 +13,23 @@
 #include <QUrl>
 
 #include "core/tools/toolregistry.h"
+
+namespace {
+/** 按扩展名推断图片 MIME，用于 data URL 构造（无法识别回退 PNG） */
+QString guessImageMime(const QString &path)
+{
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix == QLatin1String("jpg") || suffix == QLatin1String("jpeg"))
+        return QStringLiteral("image/jpeg");
+    if (suffix == QLatin1String("bmp"))
+        return QStringLiteral("image/bmp");
+    if (suffix == QLatin1String("webp"))
+        return QStringLiteral("image/webp");
+    if (suffix == QLatin1String("gif"))
+        return QStringLiteral("image/gif");
+    return QStringLiteral("image/png");
+}
+} // namespace
 
 OpenAiCompatProvider::OpenAiCompatProvider(const Config &config, QObject *parent)
     : IModelProvider(parent)
@@ -84,7 +102,7 @@ void OpenAiCompatProvider::send(const QList<Message> &history, const QString &mo
                 if (f.exists() && f.open(QIODevice::ReadOnly)) {
                     const QByteArray bytes = f.readAll();
                     const QString mime = m.imageMime.isEmpty()
-                        ? QStringLiteral("image/png") : m.imageMime;
+                        ? guessImageMime(m.imagePath) : m.imageMime;
                     dataUrl = QStringLiteral("data:") + mime + QStringLiteral(";base64,")
                               + QString::fromLatin1(bytes.toBase64());
                 } else {

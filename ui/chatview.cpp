@@ -37,7 +37,8 @@ ChatView::ChatView(QWidget *parent)
     updateEmptyHint();
 }
 
-void ChatView::rebuild(const QList<QPair<QString, QString>> &messages)
+void ChatView::rebuild(const QList<QPair<QString, QString>> &messages,
+                       const QList<QString> &images)
 {
     for (MessageBubble *b : m_bubbles) {
         m_layout->removeWidget(b);
@@ -45,19 +46,22 @@ void ChatView::rebuild(const QList<QPair<QString, QString>> &messages)
     }
     m_bubbles.clear();
 
-    for (const auto &m : messages)
-        appendMessage(m.first, m.second);
+    for (int i = 0; i < messages.size(); ++i)
+        appendMessage(messages.at(i).first, messages.at(i).second,
+                      i < images.size() ? images.at(i) : QString());
 
     updateEmptyHint();
     scrollToBottom();
 }
 
-MessageBubble *ChatView::appendMessage(const QString &role, const QString &text)
+MessageBubble *ChatView::appendMessage(const QString &role, const QString &text,
+                                       const QString &imagePath)
 {
-    return insertMessage(m_bubbles.size(), role, text);
+    return insertMessage(m_bubbles.size(), role, text, imagePath);
 }
 
-MessageBubble *ChatView::insertMessage(int index, const QString &role, const QString &text)
+MessageBubble *ChatView::insertMessage(int index, const QString &role, const QString &text,
+                                       const QString &imagePath)
 {
     index = qBound(0, index, m_bubbles.size());
 
@@ -67,7 +71,7 @@ MessageBubble *ChatView::insertMessage(int index, const QString &role, const QSt
     else if (role == QLatin1String("tool"))
         r = MessageBubble::Role::Tool;
 
-    auto *bubble = new MessageBubble(r, text, m_container);
+    auto *bubble = new MessageBubble(r, text, m_container, imagePath);
 
     // 布局里 0..n-1 是气泡，最后一项是弹簧，插到这个区间即可
     m_layout->insertWidget(index, bubble);

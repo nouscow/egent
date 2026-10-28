@@ -18,8 +18,10 @@ class QCheckBox;
 class QListWidget;
 class QListWidgetItem;
 class QComboBox;
+class QLabel;
 class QPlainTextEdit;
 class QPushButton;
+class QToolButton;
 class QTimer;
 class IModelProvider;
 
@@ -114,6 +116,20 @@ private:
 
     /** 本地演示消息：M2 接入真实接口后由会话模型替换 */
     QList<QPair<QString, QString>> m_messages; // (role, text)
+    /** 与 m_messages 一一对应：每条消息的图片附件路径（无图为空串），用于重建/请求体 */
+    QList<QString> m_messageImages;
+
+    /** 输入区待发送的图片附件（未发送前可预览/移除） */
+    QString m_pendingImage;
+    QString m_pendingImageMime;
+    QPushButton *m_imageBtn = nullptr;
+    QToolButton *m_imagePreview = nullptr;
+
+    void onPickImage();
+    void onClearImage();
+    void updateImagePreview();
+    /** 按图片扩展名推断 MIME（无法识别时回退 image/png） */
+    static QString guessImageMime(const QString &path);
 
     IModelProvider *m_provider = nullptr;     // 当前 provider（M1 仅 BailianProvider）
     QTimer *m_streamTimer = nullptr;          // 流式渲染节流（50ms）

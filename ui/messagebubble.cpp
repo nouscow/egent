@@ -4,10 +4,16 @@
 #include "avatarwidget.h"
 
 #include <QContextMenuEvent>
+#include <QDesktopServices>
+#include <QEvent>
+#include <QFileInfo>
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QPixmap>
 #include <QTextDocument>
+#include <QUrl>
 
 #include "theme/thememanager.h"
 #include <QLabel>
@@ -16,11 +22,15 @@ namespace {
 constexpr int kBubbleMaxWidth = 560;
 } // namespace
 
-MessageBubble::MessageBubble(Role role, const QString &text, QWidget *parent)
+MessageBubble::MessageBubble(Role role, const QString &text, QWidget *parent,
+                              const QString &imagePath)
     : QWidget(parent)
     , m_role(role)
+    , m_imagePath(imagePath)
 {
     buildUi(text);
+    if (!m_imagePath.isEmpty())
+        setImagePath(m_imagePath);
 }
 
 void MessageBubble::buildUi(const QString &text)
@@ -64,25 +74,48 @@ void MessageBubble::buildUi(const QString &text)
                     m_avatar->setImage(AvatarStore::instance().image(avatarRole));
             });
 
-    m_bubble = new QLabel(this);
+    // 气泡容器：内部垂直排布「文本 + 图片附件」两行，
+    // 样式（背景/圆角/padding）统一挂在容器上，文本 label 透明继承。
+    m_bubbleBox = new QWidget(this);
+    m_bubbleBox->setMaximumWidth(kBubbleMaxWidth);
+    m_bubbleBox->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
+    m_bubbleBox->setAttribute(Qt::WA_StyledBackground, true);
+    m_bubbleBox->setProperty("role", isUser ? "userBubble" : "assistantBubble");
+
+    m_contentLayout = new QVBoxLayout(m_bubbleBox);
+    m_contentLayout->setContentsMargins(0, 0, 0, 0);
+    m_contentLayout->setSpacing(6);
+
+    m_bubble = new QLabel(m_bubbleBox);
     m_bubble->setWordWrap(true);
     m_bubble->setTextFormat(Qt::PlainText);
     m_bubble->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_bubble->setMaximumWidth(kBubbleMaxWidth);
-    m_bubble->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
     m_bubble->setAttribute(Qt::WA_StyledBackground, true);
-    m_bubble->setProperty("role", isUser ? "userBubble" : "assistantBubble");
-    // 让右键事件冒泡到 MessageBubble，否则 QLabel 会吃掉它
+    // 文本区域保持透明，底色由容器承担；子控件默认不绘制背景，无需额外处理
     m_bubble->setContextMenuPolicy(Qt::NoContextMenu);
+    m_contentLayout->addWidget(m_bubble);
+
+    // 图片附件：贴左下角展示，点击用系统查看器打开原图
+    m_imageLabel = new QLabel(m_bubbleBox);
+    m_imageLabel->setObjectName(QStringLiteral("messageImageLabel"));
+    m_imageLabel->setCursor(Qt::PointingHandCursor);
+    m_imageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_imageLabel->setToolTip(QStringLiteral("点击查看原图"));
+    m_imageLabel->setContextMenuPolicy(Qt::NoContextMenu);
+    m_imageLabel->hide();
+    m_imageLabel->installEventFilter(this);
+    m_contentLayout->addWidget(m_imageLabel, 0, Qt::AlignLeft);
+    m_imageLabel->setContentsMargins(0, 0, 0, 0);
+
     m_avatar->setContextMenuPolicy(Qt::NoContextMenu);
 
     if (isUser) {
         row->addStretch(1);
-        row->addWidget(m_bubble, 0, Qt::AlignTop);
+        row->addWidget(m_bubbleBox, 0, Qt::AlignTop);
         row->addWidget(m_avatar, 0, Qt::AlignTop);
     } else {
         row->addWidget(m_avatar, 0, Qt::AlignTop);
-        row->addWidget(m_bubble, 0, Qt::AlignTop);
+        row->addWidget(m_bubbleBox, 0, Qt::AlignTop);
         row->addStretch(1);
     }
 
@@ -120,6 +153,46 @@ void MessageBubble::setText(const QString &text)
         m_bubble->setMinimumWidth(width);
         m_bubble->updateGeometry();
     }
+}
+
+void MessageBubble::setImagePath(const QString &path)
+{
+    m_imagePath = path;
+    if (!m_imageLabel)
+        return;
+
+    if (path.isEmpty()) {
+        m_imageLabel->clear();
+        m_imageLabel->hide();
+        return;
+    }
+
+    QPixmap pm(path);
+    if (pm.isNull()) {
+        m_imageLabel->clear();
+        m_imageLabel->hide();
+        return;
+    }
+
+    const int maxW = qMin(kImageMaxWidth, kBubbleMaxWidth - 32);
+    if (pm.width() > maxW)
+        pm = pm.scaledToWidth(maxW, Qt::SmoothTransformation);
+    m_imageLabel->setPixmap(pm);
+    m_imageLabel->setToolTip(QStringLiteral("点击查看原图\n%1").arg(path));
+    m_imageLabel->show();
+}
+
+bool MessageBubble::eventFilter(QObject *obj, QEvent *event)
+{
+    // 图片缩略图点击 → 用系统查看器打开原图
+    if (obj == m_imageLabel && event->type() == QEvent::MouseButtonRelease) {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton && !m_imagePath.isEmpty()) {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(m_imagePath));
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 QString MessageBubble::text() const
