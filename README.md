@@ -29,11 +29,12 @@ API Key 读取顺序：**环境变量优先，其次设置面板中保存的值*
 ## 测试
 
 ```bash
-cmake --build build --target theme_selftest session_test tool_test cmd_test
+cmake --build build --target theme_selftest session_test tool_test cmd_test skill_test
 ./build/theme_selftest.exe   # 主题令牌与 QSS 渲染（无需网络）
 ./build/session_test.exe     # SQLite 会话存储
 ./build/tool_test.exe        # 只读工具与路径越界拦截
 ./build/cmd_test.exe         # 命令执行、文件写入、界面不冻结
+./build/skill_test.exe       # 核心技能系统（注册表 / help / time / calc）
 ```
 
 另外两个需要网络与 API Key：`provider_live_test`（流式接口）、`agent_test`（工具调用闭环）。
@@ -56,4 +57,4 @@ cmake --build build --target theme_selftest session_test tool_test cmd_test
 
 - 仅 Windows（MinGW 构建）
 - 免费额度查询不可行：需阿里云 RAM AccessKey + BSS OpenAPI，DashScope API Key 无权访问。因此 P1.4 采用**本地记录方案 B**：设置面板手动录入月度额度上限 / 本月已用（跨月自动清零），左栏实时展示，并提供「打开厂商控制台」按钮跳转查看真实用量（与 `bl` 的 Console 登录额度能力存在差异）
-- 生图 / 识图 尚未实现
+- 生图尚未入会话（弹窗预览）；识图（视觉理解）依赖 qwen3-vl-plus，图片附件暂不参与模型上下文

@@ -25,6 +25,7 @@
 #include "core/providers/providerregistry.h"
 #include "core/tools/pathguard.h"
 #include "core/tools/toolregistry.h"
+#include "core/skills/skillregistry.h"
 #include "ui/chatview.h"
 #include "ui/settingsdialog.h"
 #include "ui/messagebubble.h"
@@ -308,6 +309,21 @@ void MainWindow::buildUi()
         QStringLiteral("说点什么……（Ctrl+Enter 发送 · Esc 停止 · Ctrl+N 新会话 · F1 帮助）"));
     m_input->setFixedHeight(78);
     inputLayout->addWidget(m_input, 1);
+
+    // 技能命令菜单按钮（/help、/calc 等，点击插入命令到输入框）
+    m_skillMenuBtn = new QToolButton(inputWrap);
+    m_skillMenuBtn->setObjectName(QStringLiteral("skillButton"));
+    m_skillMenuBtn->setText(QStringLiteral("/"));
+    m_skillMenuBtn->setFixedSize(40, 40);
+    m_skillMenuBtn->setToolTip(QStringLiteral("技能命令（输入以 / 开头，例如 /calc 1+2*3）"));
+    m_skillMenuBtn->setPopupMode(QToolButton::InstantPopup);
+    m_skillMenuBtn->setCursor(Qt::PointingHandCursor);
+    auto *skillMenu = new QMenu(m_skillMenuBtn);
+    skillMenu->setObjectName(QStringLiteral("skillMenu"));
+    connect(skillMenu, &QMenu::aboutToShow, this, &MainWindow::rebuildSkillMenu);
+    m_skillMenuBtn->setMenu(skillMenu);
+    rebuildSkillMenu();
+    inputLayout->addWidget(m_skillMenuBtn, 0, Qt::AlignBottom);
 
     // 图片选择按钮 + 已附加图片的缩略预览（点击预览移除）
     m_imageBtn = new QPushButton(inputWrap);
@@ -1181,6 +1197,60 @@ bool MainWindow::exportSessionToHtmlFile(int sessionId, const QString &path, QSt
     return true;
 }
 
+void MainWindow::rebuildSkillMenu()
+{
+    QMenu *menu = m_skillMenuBtn ? m_skillMenuBtn->menu() : nullptr;
+    if (!menu)
+        return;
+    menu->clear();
+
+    const QList<ISkill *> skills = SkillRegistry::instance().skills();
+    if (skills.isEmpty()) {
+        menu->addAction(QStringLiteral("（暂无技能）"))->setEnabled(false);
+        return;
+    }
+    for (ISkill *s : skills) {
+        QAction *act = menu->addAction(QStringLiteral("/%1  %2").arg(s->command(), s->summary()));
+        act->setToolTip(s->description());
+        act->setStatusTip(s->description());
+        connect(act, &QAction::triggered, this, [this, s] {
+            if (m_input)
+                m_input->setPlainText(QLatin1Char('/') + s->command());
+        });
+    }
+}
+
+void MainWindow::handleSlashCommand(const QString &text)
+{
+    // text 形如 "/calc 3+4" 或 "/help calc"；仅本地执行，无网络调用。
+    const QStringList parts =
+        text.mid(1).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    const QString cmd = parts.isEmpty() ? QString() : parts.first().toLower();
+    const QStringList args = parts.mid(1);
+
+    ISkill *skill = SkillRegistry::instance().skillByName(cmd);
+    const QString result =
+        skill ? skill->execute(args)
+              : QStringLiteral("未知命令 /%1，输入 /help 查看可用技能。").arg(cmd);
+
+    // UI 展示（user 原文 + assistant 结果）
+    m_chatView->appendMessage(QStringLiteral("user"), text);
+    m_chatView->appendMessage(QStringLiteral("assistant"), result);
+
+    // 与普通消息一致地落库（有会话时才写）
+    const int sid = ensureSession();
+    if (m_store.isOpen() && sid > 0) {
+        const int before = m_store.messages(sid).size();
+        m_store.appendMessage(sid, Role::User, text, QString(), QString());
+        m_store.appendMessage(sid, Role::Assistant, result, QString(), QString());
+        if (before == 0) {
+            m_store.renameSession(sid, text.left(20));
+            reloadSessionList();
+        }
+    }
+    m_input->clear();
+}
+
 void MainWindow::onSendClicked()
 {
     // 生成中：按钮点击 = 停止（首字可能要等好几秒，必须能中止）
@@ -1193,6 +1263,13 @@ void MainWindow::onSendClicked()
     const QString text = m_input->toPlainText().trimmed();
     if (text.isEmpty() && m_pendingImage.isEmpty())
         return;
+
+    // 技能命令路由：以 / 开头（且非 //）视为本地技能，不走模型
+    if (text.startsWith(QLatin1Char('/')) && !text.startsWith(QLatin1String("//"))) {
+        handleSlashCommand(text);
+        return;
+    }
+
     if (!m_provider)
         return;
 

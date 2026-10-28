@@ -20,6 +20,7 @@ class QListWidgetItem;
 class QComboBox;
 class QLabel;
 class QPlainTextEdit;
+class QMenu;
 class QPushButton;
 class QToolButton;
 class QTimer;
@@ -92,6 +93,11 @@ private:
     /** 刷新左栏额度显示（额度为本机手动记录，跨月清零） */
     void refreshQuotaLabel();
 
+    /** 处理以 / 开头的技能命令，返回 true 表示已消费本次输入 */
+    void handleSlashCommand(const QString &text);
+    /** 重建技能命令菜单（跟随注册表实时刷新） */
+    void rebuildSkillMenu();
+
     /** 重建左侧会话列表 */
     void reloadSessionList();
     /** 切到指定会话（重新从库里读消息并渲染） */
@@ -127,6 +133,7 @@ private:
     QString m_pendingImageMime;
     QPushButton *m_imageBtn = nullptr;
     QToolButton *m_imagePreview = nullptr;
+    QToolButton *m_skillMenuBtn = nullptr;
 
     void onPickImage();
     void onClearImage();

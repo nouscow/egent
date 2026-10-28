@@ -38,6 +38,13 @@ qt_add_library(egent_core STATIC
     core/tools/runcommandtool.cpp
     core/tools/writefiletool.h
     core/tools/writefiletool.cpp
+
+    # 核心技能系统（P2 子集：ISkill + SkillRegistry + 内置技能）
+    core/skills/iskill.h
+    core/skills/skillregistry.h
+    core/skills/skillregistry.cpp
+    core/skills/builtinskills.h
+    core/skills/builtinskills.cpp
 )
 target_include_directories(egent_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(egent_core PUBLIC Qt::Core Qt::Network Qt::Sql)
@@ -154,6 +161,8 @@ target_link_libraries(session_test PRIVATE egent_core)
 # Agent 只读工具（含路径越界拦截）
 qt_add_executable(tool_test tests/tool_test.cpp)
 target_link_libraries(tool_test PRIVATE egent_core)
+qt_add_executable(skill_test tests/skill_test.cpp)
+target_link_libraries(skill_test PRIVATE egent_core)
 
 # 命令执行工具（黑名单 / 工作区约束 / 退出码）
 qt_add_executable(cmd_test tests/cmd_test.cpp)
