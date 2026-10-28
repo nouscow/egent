@@ -1,5 +1,6 @@
 #include "agentloop.h"
 
+#include "core/tools/auditlog.h"
 #include "core/tools/toolregistry.h"
 
 #include <QDebug>

@@ -2,6 +2,7 @@
 // 退出码 0 = 全部通过。
 
 #include "core/tools/pathguard.h"
+#include "core/tools/auditlog.h"
 #include "core/tools/readonlytools.h"
 #include "core/tools/toolregistry.h"
 
@@ -200,6 +201,50 @@ int main(int argc, char *argv[])
     check(fn.value(QStringLiteral("parameters")).toObject().value(QStringLiteral("type"))
               .toString() == QStringLiteral("object"),
           "parameters 是 JSON Schema object");
+
+    qInfo().noquote() << "\n[6] AuditLog";
+    {
+        QTemporaryDir tmp;
+        check(tmp.isValid(), "临时目录可创建");
+        const QString logPath = tmp.filePath(QStringLiteral("audit.log"));
+        AuditLog::setLogPathForTest(logPath);
+
+        AuditLog::instance().append(QStringLiteral("read_file"), R"({"path":"D:/a.txt"})",
+                                    QStringLiteral("ok 读取 3 行"), AuditLog::Outcome::Ok);
+        AuditLog::instance().append(QStringLiteral("run_command"),
+                                    QStringLiteral("dir"), QStringLiteral("命令成功"),
+                                    AuditLog::Outcome::Ok);
+        AuditLog::instance().append(QStringLiteral("write_file"),
+                                    QStringLiteral("覆盖 D:/b.txt"),
+                                    QStringLiteral("用户拒绝"), AuditLog::Outcome::Denied);
+        AuditLog::instance().append(QStringLiteral("unknown"),
+                                    QStringLiteral("{}"),
+                                    QStringLiteral("没有该工具"), AuditLog::Outcome::Fail);
+
+        QFile f(logPath);
+        check(f.open(QIODevice::ReadOnly | QIODevice::Text), "审计文件可打开", logPath);
+        if (f.isOpen()) {
+            const QString all = QString::fromUtf8(f.readAll());
+            const QStringList lines = all.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+            check(lines.size() == 4, "每条调用一行，共 4 行");
+            check(lines.value(0).contains(QStringLiteral("[tool=read_file]")) &&
+                  lines.value(0).contains(QStringLiteral("[outcome=ok]")),
+                  "首行含时间/工具/结果字段", lines.value(0));
+            check(lines.value(1).contains(QStringLiteral("[outcome=ok]")), "第二行 ok");
+            check(lines.value(2).contains(QStringLiteral("[outcome=denied]")),
+                  "拒绝调用也落盘（denied）");
+            check(lines.value(3).contains(QStringLiteral("[outcome=fail]")),
+                  "失败调用落盘（fail）");
+            check(lines.value(0).contains(QStringLiteral("D:/a.txt")),
+                  "参数摘要写入");
+            check(lines.value(0).contains(QStringLiteral("read_file")),
+                  "工具名写入");
+        }
+        // 恢复默认路径，避免影响其它测试
+        AuditLog::setLogPathForTest(QString());
+        check(AuditLog::logFilePath().endsWith(QStringLiteral("audit.log")),
+              "恢复后回到默认日志路径");
+    }
 
     qInfo().noquote() << QStringLiteral("\n===== 通过 %1 / 失败 %2 =====").arg(g_pass).arg(g_fail);
     return g_fail == 0 ? 0 : 1;

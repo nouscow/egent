@@ -39,6 +39,20 @@ cmake --build build --target theme_selftest session_test tool_test cmd_test skil
 
 另外两个需要网络与 API Key：`provider_live_test`（流式接口）、`agent_test`（工具调用闭环）。
 
+## 插件生态（阶段4）
+
+项目支持通过 Qt 插件机制扩展技能：`core/plugins/ibailianplugin.h` 定义了插件契约（`IBailianPlugin`，沿用 `IModelProvider` 的 `Q_DECLARE_INTERFACE` 模式），`PluginContext` 向插件注入 SkillRegistry / ProviderRegistry 与数据目录、日志等运行上下文，`PluginLoader` 在启动时自动扫描 `build-release/plugins/*.dll` 并加载（单插件失败隔离，不中断主程序）。
+
+编写一个插件的三要素：
+
+1. 继承 `IBailianPlugin` 并实现 `id()` / `registerSkills()` / `unregisterSkills()`；
+2. 导出工厂：`Q_PLUGIN_METADATA(IID BailianPluginIID)` + 一个返回 `IBailianPlugin*` 的 `extern "C"` 函数；
+3. 把插件目标以 `qt_add_plugin` 加入 CMake，构建后放入 `plugins/` 目录（参考 `plugins/helloplugin` 示例）。
+
+插件注册的技能会随 `/命令菜单` 与 `/help` 自动出现；卸载时统一注销，不留悬垂上下文。
+
+**工具审计日志**：所有 Agent 工具调用（只读工具 / 命令执行 / 文件写入，含被用户拒绝的调用）以「时间 / 工具 / 参数 / 结果摘要」写入本地日志 `<AppData>/egent/logs/audit.log`，仅追加不覆盖，单行字段截断防膨胀（企划书安全底线）。
+
 ## 第三方组件与许可
 
 本项目的**唯一第三方依赖是 Qt**，其余全部为自研代码。
@@ -57,4 +71,4 @@ cmake --build build --target theme_selftest session_test tool_test cmd_test skil
 
 - 仅 Windows（MinGW 构建）
 - 免费额度查询不可行：需阿里云 RAM AccessKey + BSS OpenAPI，DashScope API Key 无权访问。因此 P1.4 采用**本地记录方案 B**：设置面板手动录入月度额度上限 / 本月已用（跨月自动清零），左栏实时展示，并提供「打开厂商控制台」按钮跳转查看真实用量（与 `bl` 的 Console 登录额度能力存在差异）
-- 生图尚未入会话（弹窗预览）；识图（视觉理解）依赖 qwen3-vl-plus，图片附件暂不参与模型上下文
+- Agent 工具调用记录本地审计日志（见「插件生态」一节），不做云端上传

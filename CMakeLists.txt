@@ -30,6 +30,8 @@ qt_add_library(egent_core STATIC
     core/tools/itool.h
     core/tools/pathguard.h
     core/tools/pathguard.cpp
+    core/tools/auditlog.h
+    core/tools/auditlog.cpp
     core/tools/readonlytools.h
     core/tools/readonlytools.cpp
     core/tools/toolregistry.h
