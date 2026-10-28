@@ -49,6 +49,8 @@
 #include <QTextStream>
 #include <QDialog>
 #include <QPixmap>
+#include <QDockWidget>
+#include <QCloseEvent>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -145,9 +147,7 @@ MainWindow::~MainWindow()
 void MainWindow::buildUi()
 {
     auto *central = new QWidget(this);
-    auto *outer = new QHBoxLayout(central);
-    outer->setContentsMargins(0, 0, 0, 0);
-    outer->setSpacing(0);
+    central->setObjectName(QStringLiteral("centralHost"));
 
     // ---------- 左侧：会话列表 ----------
     auto *sidebar = new QWidget(central);
@@ -183,7 +183,13 @@ void MainWindow::buildUi()
         "以下数据为本地手动记录（设置中填写），厂商真实用量请在控制台查看。"));
     sideLayout->addWidget(m_quotaLabel);
 
-    outer->addWidget(sidebar);
+    // P3.5：会话栏升级为可停靠面板（可拖拽到右侧 / 浮动 / 关闭），布局状态持久化
+    auto *sessionDock = new QDockWidget(QStringLiteral("会话"), central);
+    sessionDock->setObjectName(QStringLiteral("sessionDock"));
+    sessionDock->setWidget(sidebar);
+    sessionDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable | QDockWidget::DockWidgetClosable);
+    addDockWidget(Qt::LeftDockWidgetArea, sessionDock);
+    m_sessionDock = sessionDock;
 
     // ---------- 右侧：对话区 ----------
     auto *rightWrap = new QWidget(central);
@@ -204,6 +210,16 @@ void MainWindow::buildUi()
     auto *title = new QLabel(QStringLiteral("Egent"), toolbar);
     title->setObjectName(QStringLiteral("toolbarTitle"));
     toolLayout->addWidget(title);
+
+    auto *dockToggle = new QToolButton(toolbar);
+    dockToggle->setObjectName(QStringLiteral("dockToggleButton"));
+    dockToggle->setText(QStringLiteral("会话栏"));
+    dockToggle->setCheckable(true);
+    dockToggle->setToolTip(QStringLiteral("显示 / 隐藏会话栏（可拖拽到窗口任意边缘，布局自动记忆）"));
+    if (m_sessionDock)
+        connect(dockToggle, &QToolButton::clicked, m_sessionDock,
+                &QDockWidget::setVisible);
+    toolLayout->addWidget(dockToggle);
 
     toolLayout->addStretch(1);
 
@@ -356,8 +372,23 @@ void MainWindow::buildUi()
 
     root->addWidget(inputWrap);
 
-    outer->addWidget(rightWrap, 1);
-    setCentralWidget(central);
+    setCentralWidget(rightWrap);
+    restoreWindowState();
+}
+
+void MainWindow::restoreWindowState()
+{
+    QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    const QByteArray st = s.value(QStringLiteral("ui/dock_state")).toByteArray();
+    if (!st.isEmpty())
+        restoreState(st); // restoreState 会校验版本与几何，非法数据自动忽略
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    s.setValue(QStringLiteral("ui/dock_state"), saveState());
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::setupShortcuts()
@@ -1404,35 +1435,33 @@ void MainWindow::onImageReady(const QByteArray &imageData, const QString &prompt
         return;
     }
 
-    QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("生成结果"));
-    dlg.setModal(true);
+    // P3.4：生图结果直接入会话（落库 + 气泡展示），本地另存一份便于找回
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (dir.isEmpty())
+        dir = QDir::homePath() + QStringLiteral("/.egent");
+    const QString imgDir = dir + QStringLiteral("/images");
+    if (!QDir().mkpath(imgDir))
+        qWarning().noquote() << "[img] 无法创建图片目录:" << imgDir;
 
-    auto *imgLabel = new QLabel(&dlg);
-    imgLabel->setPixmap(image.scaledToWidth(480, Qt::SmoothTransformation));
-    imgLabel->setAlignment(Qt::AlignCenter);
+    const QString stamp =
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_hhmmss_zzz"));
+    const QString path = imgDir + QStringLiteral("/gen_") + stamp + QStringLiteral(".png");
+    if (!image.save(path, "PNG")) {
+        QMessageBox::warning(this, QStringLiteral("生成失败"),
+                             QStringLiteral("图片保存失败：%1").arg(path));
+        return;
+    }
 
-    auto *saveBtn = new QPushButton(QStringLiteral("保存图片…"), &dlg);
-    auto *closeBtn = new QPushButton(QStringLiteral("关闭"), &dlg);
-    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
-    connect(saveBtn, &QPushButton::clicked, [&dlg, &image]() {
-        const QString path = QFileDialog::getSaveFileName(
-            &dlg, QStringLiteral("保存图片"), QString(),
-            QStringLiteral("PNG 图片 (*.png);;所有文件 (*)"));
-        if (!path.isEmpty())
-            image.save(path, "PNG");
-    });
+    m_messages.append({QStringLiteral("assistant"), QString()});
+    m_messageImages.append(path);
+    if (m_store.isOpen() && m_currentSessionId > 0)
+        m_store.appendMessage(m_currentSessionId, Role::Assistant,
+                              QString(), path, QLatin1String("image/png"));
+    m_chatView->appendMessage(QStringLiteral("assistant"), QString(), path);
 
-    auto *btnRow = new QHBoxLayout;
-    btnRow->addStretch(1);
-    btnRow->addWidget(saveBtn);
-    btnRow->addWidget(closeBtn);
-
-    auto *root = new QVBoxLayout(&dlg);
-    root->addWidget(imgLabel);
-    root->addWidget(new QLabel(prompt, &dlg));
-    root->addLayout(btnRow);
-    dlg.exec();
+    statusBar()->showMessage(
+        QStringLiteral("图片已生成并加入会话（%1）").arg(path), 8000);
+    Q_UNUSED(prompt);
 }
 
 void MainWindow::onImageError(const QString &message)

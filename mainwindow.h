@@ -24,6 +24,8 @@ class QMenu;
 class QPushButton;
 class QToolButton;
 class QTimer;
+class QCloseEvent;
+class QDockWidget;
 class IModelProvider;
 
 class MainWindow : public QMainWindow
@@ -78,6 +80,9 @@ private slots:
 
 private:
     void buildUi();
+    /** 保存可定制布局状态（会话栏 dock 位置 / 浮动 / 可见性），重启恢复 */
+    void restoreWindowState();
+    void closeEvent(QCloseEvent *event) override;
     /** 用当前主题令牌重新渲染整个对话区（切换主题时旧内容也要变色） */
     void renderChat();
     /** 把设置里的采样参数 / 超时下发给 provider */
@@ -122,6 +127,7 @@ private:
     QPushButton *m_sendBtn = nullptr;
     QCheckBox *m_thinkingBox = nullptr;
     class QLabel *m_quotaLabel = nullptr;
+    class QDockWidget *m_sessionDock = nullptr;
 
     /** 本地演示消息：M2 接入真实接口后由会话模型替换 */
     QList<QPair<QString, QString>> m_messages; // (role, text)
