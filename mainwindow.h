@@ -89,6 +89,8 @@ private:
     void setupShortcuts();
     /** 展示快捷键帮助 */
     void showShortcutsHelp();
+    /** 刷新左栏额度显示（额度为本机手动记录，跨月清零） */
+    void refreshQuotaLabel();
 
     /** 重建左侧会话列表 */
     void reloadSessionList();
@@ -113,6 +115,7 @@ private:
     QComboBox *m_modelBox = nullptr;
     QPushButton *m_sendBtn = nullptr;
     QCheckBox *m_thinkingBox = nullptr;
+    class QLabel *m_quotaLabel = nullptr;
 
     /** 本地演示消息：M2 接入真实接口后由会话模型替换 */
     QList<QPair<QString, QString>> m_messages; // (role, text)

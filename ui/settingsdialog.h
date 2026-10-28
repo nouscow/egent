@@ -46,6 +46,11 @@ public:
     /** 百炼 MaaS 推理工作空间 ID（生图端点需要） */
     QString imageWorkspaceId() const;
 
+    /** 月度额度上限（元），0 表示不设限 */
+    double monthlyQuotaLimit() const;
+    /** 本月已用额度（元），手动记录，跨月自动清零 */
+    double quotaUsedThisMonth() const;
+
 private:
     void buildUi();
     void showAbout();
@@ -61,4 +66,6 @@ private:
     QCheckBox *m_writeEnabled = nullptr;
     QComboBox *m_fontSize = nullptr;
     QLineEdit *m_imageWsId = nullptr;
+    QDoubleSpinBox *m_quotaMonthly = nullptr;
+    QDoubleSpinBox *m_quotaUsed = nullptr;
 };

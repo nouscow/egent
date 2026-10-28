@@ -55,5 +55,5 @@ cmake --build build --target theme_selftest session_test tool_test cmd_test
 ## 已知限制
 
 - 仅 Windows（MinGW 构建）
-- 免费额度查询不可行：需阿里云 RAM AccessKey + BSS OpenAPI，DashScope API Key 无权访问
-- 插件 / 技能 / 生图 / 识图 尚未实现
+- 免费额度查询不可行：需阿里云 RAM AccessKey + BSS OpenAPI，DashScope API Key 无权访问。因此 P1.4 采用**本地记录方案 B**：设置面板手动录入月度额度上限 / 本月已用（跨月自动清零），左栏实时展示，并提供「打开厂商控制台」按钮跳转查看真实用量（与 `bl` 的 Console 登录额度能力存在差异）
+- 生图 / 识图 尚未实现

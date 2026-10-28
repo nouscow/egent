@@ -16,6 +16,9 @@
 #include <QSettings>
 #include <QSpinBox>
 #include <QVBoxLayout>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QDate>
 
 namespace {
 // 与 BailianProvider 的默认值保持一致
@@ -151,6 +154,42 @@ void SettingsDialog::buildUi()
                        "在百炼控制台「模型服务 → 推理工作空间」获取。"));
     form->addRow(QStringLiteral("生图工作区 ID"), m_imageWsId);
 
+    // ---- 月度额度（本地记录方案 B：DashScope API Key 无权查询账号级额度）----
+    // 调研结论：百炼未提供用 API Key 查询免费额度的接口（需 RAM AccessKey + BSS OpenAPI）。
+    // 因此这里改为「本地手动记录」：上限用于预算提醒，已用每月手动更新，
+    // 跨月自动清零。厂商侧真实用量需按钮跳转控制台查看。
+    m_quotaMonthly = new QDoubleSpinBox(this);
+    m_quotaMonthly->setRange(0.0, 1000000.0);
+    m_quotaMonthly->setDecimals(0);
+    m_quotaMonthly->setSuffix(QStringLiteral(" 元"));
+    m_quotaMonthly->setToolTip(
+        QStringLiteral("月度额度上限（预算提醒用）。0 表示不设限。"));
+    form->addRow(QStringLiteral("额度上限"), m_quotaMonthly);
+
+    m_quotaUsed = new QDoubleSpinBox(this);
+    m_quotaUsed->setRange(0.0, 1000000.0);
+    m_quotaUsed->setDecimals(2);
+    m_quotaUsed->setSuffix(QStringLiteral(" 元"));
+    m_quotaUsed->setToolTip(
+        QStringLiteral("本月已消费额度。\n"
+                       "由你手动记录，跨月自动清零，仅用于本地预算提醒。"));
+    form->addRow(QStringLiteral("本月已用"), m_quotaUsed);
+
+    auto *quotaRow = new QWidget(this);
+    auto *quotaLayout = new QHBoxLayout(quotaRow);
+    quotaLayout->setContentsMargins(0, 0, 0, 0);
+    quotaLayout->setSpacing(8);
+    auto *openConsole = new QPushButton(QStringLiteral("打开厂商控制台"), quotaRow);
+    openConsole->setToolTip(
+        QStringLiteral("跳转百炼控制台查看真实用量与账单（需登录阿里云账号）"));
+    connect(openConsole, &QPushButton::clicked, this, []() {
+        QDesktopServices::openUrl(
+            QUrl(QStringLiteral("https://bailian.console.aliyun.com/")));
+    });
+    quotaLayout->addWidget(openConsole);
+    quotaLayout->addStretch(1);
+    form->addRow(QStringLiteral("用量查询"), quotaRow);
+
     root->addLayout(form);
 
     auto *hint = new QLabel(
@@ -232,6 +271,17 @@ void SettingsDialog::loadFromSettings()
                                    QStringLiteral("off")).toString();
     const int pi = m_commandPolicy->findData(policy);
     m_commandPolicy->setCurrentIndex(pi >= 0 ? pi : 0);
+
+    // 额度：跨月自动清零「本月已用」。
+    // 以 month_key（yyyy-MM）为凭据，与当前月份不一致即视为新的一月。
+    const QString thisMonth = QDate::currentDate().toString(QStringLiteral("yyyy-MM"));
+    const QString storedMonth =
+        s.value(QStringLiteral("quota/month_key"), QString()).toString();
+    const double used =
+        storedMonth == thisMonth ? s.value(QStringLiteral("quota/month_used"), 0.0).toDouble()
+                                 : 0.0;
+    m_quotaMonthly->setValue(s.value(QStringLiteral("quota/monthly_limit"), 0.0).toDouble());
+    m_quotaUsed->setValue(used);
 }
 
 void SettingsDialog::saveToSettings()
@@ -252,6 +302,12 @@ void SettingsDialog::saveToSettings()
     s.setValue(QStringLiteral("agent/write_enabled"), m_writeEnabled->isChecked());
     s.setValue(QStringLiteral("ui/font_size"), m_fontSize->currentData().toInt());
     s.setValue(QStringLiteral("image/workspace_id"), m_imageWsId->text().trimmed());
+
+    // 额度记录：本月已用只在跨月时清零，保存时必须连同月份凭据一起写入
+    s.setValue(QStringLiteral("quota/monthly_limit"), m_quotaMonthly->value());
+    s.setValue(QStringLiteral("quota/month_used"), m_quotaUsed->value());
+    s.setValue(QStringLiteral("quota/month_key"),
+               QDate::currentDate().toString(QStringLiteral("yyyy-MM")));
 }
 
 double SettingsDialog::temperature() const
@@ -302,6 +358,16 @@ int SettingsDialog::fontSize() const
 QString SettingsDialog::imageWorkspaceId() const
 {
     return m_imageWsId->text().trimmed();
+}
+
+double SettingsDialog::monthlyQuotaLimit() const
+{
+    return m_quotaMonthly ? m_quotaMonthly->value() : 0.0;
+}
+
+double SettingsDialog::quotaUsedThisMonth() const
+{
+    return m_quotaUsed ? m_quotaUsed->value() : 0.0;
 }
 
 void SettingsDialog::showAbout()

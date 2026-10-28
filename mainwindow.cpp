@@ -133,6 +133,7 @@ MainWindow::MainWindow(QWidget *parent)
         loadSession(ensureSession());
 
     renderChat();
+    refreshQuotaLabel();
 }
 
 MainWindow::~MainWindow()
@@ -172,15 +173,14 @@ void MainWindow::buildUi()
             this, &MainWindow::onSessionContextMenu);
     sideLayout->addWidget(m_sessionList, 1);
 
-    // 文档要求左栏底部展示额度，接口尚未接入，先占位
-    // 额度查询已实测不可行（需阿里云 RAM AccessKey + BSS OpenAPI，
-    // DashScope API Key 无权访问），此处如实标注而非画饼
-    auto *quota = new QLabel(QStringLiteral("额度 · 需 AccessKey"), sidebar);
-    quota->setObjectName(QStringLiteral("quotaLabel"));
-    quota->setToolTip(QStringLiteral(
-        "百炼未提供用 DashScope API Key 查询免费额度的接口。\n"
-        "如需显示额度，需配置阿里云 RAM AccessKey 调用 BSS OpenAPI。"));
-    sideLayout->addWidget(quota);
+    // 左栏底部展示额度：DashScope API Key 无权查询账号级额度（经实测），
+    // 因此走 P1.4 方案 B——本地手动记录 + 跳转控制台查看真实用量。
+    m_quotaLabel = new QLabel(sidebar);
+    m_quotaLabel->setObjectName(QStringLiteral("quotaLabel"));
+    m_quotaLabel->setToolTip(QStringLiteral(
+        "百炼未提供用 DashScope API Key 查询额度的接口。\n"
+        "以下数据为本地手动记录（设置中填写），厂商真实用量请在控制台查看。"));
+    sideLayout->addWidget(m_quotaLabel);
 
     outer->addWidget(sidebar);
 
@@ -417,6 +417,21 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><b>F1 / Ctrl + /</b></td><td>显示本帮助</td></tr>"
         "</table>");
     QMessageBox::information(this, QStringLiteral("快捷键"), text);
+}
+
+void MainWindow::refreshQuotaLabel()
+{
+    if (!m_quotaLabel)
+        return;
+    QSettings s(QStringLiteral("egent"), QStringLiteral("egent"));
+    const double limit = s.value(QStringLiteral("quota/monthly_limit"), 0.0).toDouble();
+    const double used = s.value(QStringLiteral("quota/month_used"), 0.0).toDouble();
+    const QString text = limit > 0.0
+        ? QStringLiteral("本月已用 ¥%1 / ¥%2")
+              .arg(used, 0, 'f', 2)
+              .arg(limit, 0, 'f', 0)
+        : QStringLiteral("本月已用 ¥%1（未设上限）").arg(used, 0, 'f', 2);
+    m_quotaLabel->setText(text);
 }
 
 void MainWindow::onThemeSelected(int index)
@@ -951,6 +966,7 @@ void MainWindow::openSettings()
         loadSession(existing.first().id);
     else
         loadSession(ensureSession());
+    refreshQuotaLabel();
 }
 
 void MainWindow::applyParamsFromSettings()
