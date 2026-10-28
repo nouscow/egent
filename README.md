@@ -1,8 +1,12 @@
 # Egent
 
+> ⚠️ **Archived / 已归档.** This project is no longer maintained. No new features, fixes, or PR merges are planned — feel free to fork and build on it. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full open-source manual (build, architecture, how to extend, license).
+
 Egent is a local AI desktop client for Windows. Chat with any OpenAI-compatible API: Bailian, DeepSeek, OpenAI and more. Switch model on the fly. Chats persist in SQLite; themes come from JSON tokens. Optional Agent mode reads, searches, runs and writes files in a sandbox, gated by a permission prompt and command blacklist. Keys stay local.
 
 本地 AI 客户端：多厂商对话（百炼 / DeepSeek / OpenAI）、可切换主题、会话持久化，并支持可选的本地工具调用（读文件 / 执行命令 / 写文件）。
+
+> ⚠️ **本项目已归档，停止维护。** 不再有新功能、修复或合并 PR；欢迎 fork 自行发展。完整开源手册（构建 / 架构 / 扩展方式 / 许可）见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 
 当前版本：**v0.2.0**（tag `v0.2`；已覆盖 Phase 0–5：视觉/认证 → 核心技能 → 体验补强 → 插件生态 → 工程收尾）。
 
@@ -77,7 +81,7 @@ cmake --build build-release --target provider_live_test agent_test
 
 ## 第三方组件与许可
 
-本项目的**唯一第三方依赖是 Qt**，其余全部为自研代码。
+本项目的**唯一第三方依赖是 Qt**，其余全部为自研代码。Egent 自身源码以 **LGPL-3.0-only** 许可发布（见根目录 [`LICENSE`](./LICENSE)）。
 
 - **Qt 6.x** — 双许可（商业 / LGPLv3）。本项目按 **LGPLv3** 使用：
   - 未修改 Qt 源码
