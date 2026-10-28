@@ -35,6 +35,17 @@ public:
     QString currentId() const { return m_currentId; }
     void setCurrentId(const QString &id);
 
+    /**
+     * 注册自定义厂商（插件生态 P4.2 经 PluginContext 调用）。
+     * id 冲突时覆盖旧配置；config.id 必须与 id 一致。
+     */
+    void registerCustomProvider(const QString &id, const QString &displayName,
+                                const QStringList &models,
+                                const OpenAiCompatProvider::Config &config);
+
+    /** 注销自定义厂商（插件卸载时调用）；内置三家与正在使用的厂商不可注销 */
+    void unregisterCustomProvider(const QString &id);
+
     static OpenAiCompatProvider::Config bailianConfig();
     static OpenAiCompatProvider::Config deepseekConfig();
     static OpenAiCompatProvider::Config openaiConfig();

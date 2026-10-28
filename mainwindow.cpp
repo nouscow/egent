@@ -51,6 +51,7 @@
 #include <QPixmap>
 #include <QDockWidget>
 #include <QCloseEvent>
+#include "core/plugins/pluginloader.h"
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -137,10 +138,24 @@ MainWindow::MainWindow(QWidget *parent)
 
     renderChat();
     refreshQuotaLabel();
+
+    // ---- P4：插件生态 ----
+    // 启动时扫描 plugins/ 目录加载插件（单插件失败不中断，见 PluginLoader）；
+    // 插件注册的技能会在 /命令菜单 与 /help 中自动出现。
+    {
+        auto pr = PluginLoader::instance().loadAll(this);
+        if (pr.loaded > 0) {
+            statusBar()->showMessage(
+                QStringLiteral("已加载 %1 个插件").arg(pr.loaded), 5000);
+        }
+        if (!pr.errors.isEmpty())
+            qWarning().noquote() << "[plugin] 部分插件加载失败:" << pr.errors;
+    }
 }
 
 MainWindow::~MainWindow()
 {
+    PluginLoader::instance().unloadAll(); // 先于子对象析构，注销插件注册的技能
     delete ui;
 }
 

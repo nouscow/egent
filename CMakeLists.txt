@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19)
 project(egent VERSION 0.1.0 LANGUAGES CXX)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network Sql LinguistTools Svg)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Network Sql LinguistTools Svg Test)
 
 qt_standard_project_setup()
 
@@ -45,6 +45,13 @@ qt_add_library(egent_core STATIC
     core/skills/skillregistry.cpp
     core/skills/builtinskills.h
     core/skills/builtinskills.cpp
+
+    # 插件生态（P4：IBailianPlugin 契约 + PluginContext + PluginLoader）
+    core/plugins/ibailianplugin.h
+    core/plugins/plugincontext.h
+    core/plugins/plugincontext.cpp
+    core/plugins/pluginloader.h
+    core/plugins/pluginloader.cpp
 )
 target_include_directories(egent_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(egent_core PUBLIC Qt::Core Qt::Network Qt::Sql)
@@ -112,6 +119,31 @@ target_link_libraries(egent
         Qt::Svg
 )
 
+# ============================================================
+# 插件生态（P4.4 示例插件）
+# ------------------------------------------------------------
+# 产出 helloplugin.dll（Qt 插件模块），构建后自动复制到
+# build-release/plugins/，主程序启动时由 PluginLoader 扫描加载。
+# ============================================================
+qt_add_plugin(helloplugin
+    plugins/helloplugin/helloplugin.cpp
+    plugins/helloplugin/helloplugin.h
+)
+target_include_directories(helloplugin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(helloplugin PRIVATE egent_core)
+
+add_custom_command(TARGET egent POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:egent>/plugins"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:helloplugin>
+        "$<TARGET_FILE_DIR:egent>/plugins/helloplugin.dll"
+    COMMENT "部署示例插件到 plugins/ 目录"
+)
+install(TARGETS helloplugin
+    RUNTIME DESTINATION plugins
+    LIBRARY DESTINATION plugins
+)
+
 install(TARGETS egent
     BUNDLE  DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -163,6 +195,11 @@ qt_add_executable(tool_test tests/tool_test.cpp)
 target_link_libraries(tool_test PRIVATE egent_core)
 qt_add_executable(skill_test tests/skill_test.cpp)
 target_link_libraries(skill_test PRIVATE egent_core)
+
+# 插件生态（加载 helloplugin.dll 端到端 + 失败隔离）
+qt_add_executable(plugin_test tests/plugin_test.cpp)
+target_include_directories(plugin_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(plugin_test PRIVATE egent_core Qt::Test)
 
 # 命令执行工具（黑名单 / 工作区约束 / 退出码）
 qt_add_executable(cmd_test tests/cmd_test.cpp)

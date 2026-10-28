@@ -1,6 +1,7 @@
 #include "providerregistry.h"
 
 #include <QDebug>
+#include <QSet>
 
 OpenAiCompatProvider::Config ProviderRegistry::bailianConfig()
 {
@@ -95,4 +96,33 @@ void ProviderRegistry::setCurrentId(const QString &id)
 {
     if (m_configs.contains(id) || m_configs.isEmpty())
         m_currentId = id;
+}
+
+void ProviderRegistry::registerCustomProvider(
+    const QString &id, const QString &displayName, const QStringList &models,
+    const OpenAiCompatProvider::Config &config)
+{
+    OpenAiCompatProvider::Config cfg = config;
+    cfg.id = id;
+    cfg.displayName = displayName;
+    cfg.models = models;
+    m_configs.insert(id, cfg);
+    // 已创建旧实例时强制重建，避免插件更新后仍持有过期配置
+    if (m_instances.contains(id)) {
+        delete m_instances.take(id);
+    }
+}
+
+void ProviderRegistry::unregisterCustomProvider(const QString &id)
+{
+    static const QSet<QString> builtins = {QStringLiteral("bailian"),
+                                           QStringLiteral("deepseek"),
+                                           QStringLiteral("openai")};
+    if (builtins.contains(id))
+        return; // 内置厂商不允许插件注销
+    if (m_currentId == id)
+        m_currentId = QStringLiteral("bailian"); // 退回内置默认
+    m_configs.remove(id);
+    if (m_instances.contains(id))
+        delete m_instances.take(id);
 }
